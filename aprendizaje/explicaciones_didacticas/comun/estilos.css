@@ -1,0 +1,480 @@
+/*
+ * Estilos compartidos por todos los módulos.
+ * Los colores se definen como variables (tokens) para que el modo claro
+ * y el oscuro cambien en un solo lugar.
+ */
+
+:root {
+  --fondo: #f6f4ef;
+  --superficie: #ffffff;
+  --superficie-2: #f0ede5;
+  --texto: #1d2127;
+  --texto-suave: #5a616b;
+  --borde: #d8d2c4;
+  --acento: #1f5fa8;
+  --acento-suave: #e2ecf8;
+  --sobre-acento: #ffffff;
+  --ok: #1a7346;
+  --ok-suave: #e0f2e8;
+  --error: #b42318;
+  --error-suave: #fce6e3;
+  --aviso: #8a5a00;
+  --aviso-suave: #fff3d1;
+  --resaltado: #fff1a8;
+  --codigo-fondo: #f3f1ea;
+  --sombra: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.05);
+  --radio: 10px;
+  --fuente: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fuente-codigo: ui-monospace, "Cascadia Code", Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fondo: #14161a;
+    --superficie: #1c1f24;
+    --superficie-2: #23272d;
+    --texto: #e7e9ec;
+    --texto-suave: #a3aab3;
+    --borde: #343a42;
+    --acento: #79adf2;
+    --acento-suave: #1b2a3d;
+    --sobre-acento: #10141a;
+    --ok: #5fcf96;
+    --ok-suave: #16302a;
+    --error: #ff8a80;
+    --error-suave: #3a1f1f;
+    --aviso: #e8b84a;
+    --aviso-suave: #362c14;
+    --resaltado: #5a4a12;
+    --codigo-fondo: #191c20;
+    --sombra: none;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --fondo: #14161a;
+  --superficie: #1c1f24;
+  --superficie-2: #23272d;
+  --texto: #e7e9ec;
+  --texto-suave: #a3aab3;
+  --borde: #343a42;
+  --acento: #79adf2;
+  --acento-suave: #1b2a3d;
+  --sobre-acento: #10141a;
+  --ok: #5fcf96;
+  --ok-suave: #16302a;
+  --error: #ff8a80;
+  --error-suave: #3a1f1f;
+  --aviso: #e8b84a;
+  --aviso-suave: #362c14;
+  --resaltado: #5a4a12;
+  --codigo-fondo: #191c20;
+  --sombra: none;
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: var(--fuente);
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 24px 80px;
+}
+
+h1, h2, h3 { line-height: 1.25; }
+h1 { font-size: 2rem; margin: 0.2em 0 0.3em; }
+h2 {
+  font-size: 1.45rem;
+  margin-top: 2.4em;
+  padding-top: 0.6em;
+  border-top: 1px solid var(--borde);
+}
+h3 { font-size: 1.12rem; margin-top: 1.6em; }
+
+a { color: var(--acento); }
+
+p, li { max-width: 72ch; }
+
+code {
+  font-family: var(--fuente-codigo);
+  font-size: 0.9em;
+  background: var(--codigo-fondo);
+  border: 1px solid var(--borde);
+  border-radius: 5px;
+  padding: 0.05em 0.35em;
+}
+
+pre {
+  background: var(--codigo-fondo);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+
+figure { margin: 1.4em 0; }
+figcaption { color: var(--texto-suave); font-size: 0.92rem; margin-top: 0.4em; }
+
+/* ---------- Encabezado del módulo ---------- */
+
+.encabezado { padding-bottom: 8px; }
+
+.volver { font-size: 0.95rem; text-decoration: none; }
+.volver:hover { text-decoration: underline; }
+
+.meta {
+  color: var(--texto-suave);
+  font-size: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.indice-secciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.indice-secciones a {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  background: var(--superficie);
+  text-decoration: none;
+  font-size: 0.9rem;
+  color: var(--texto);
+}
+
+.indice-secciones a:hover { border-color: var(--acento); color: var(--acento); }
+
+/* ---------- Tablas ---------- */
+
+.tabla { overflow-x: auto; margin: 1.2em 0; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: var(--superficie);
+  font-size: 0.93rem;
+}
+
+th, td {
+  border: 1px solid var(--borde);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th { background: var(--superficie-2); }
+
+/* ---------- Notas destacadas ---------- */
+
+.nota {
+  border-left: 4px solid var(--acento);
+  background: var(--acento-suave);
+  border-radius: 0 var(--radio) var(--radio) 0;
+  padding: 10px 16px;
+  margin: 1.2em 0;
+}
+
+.nota p { margin: 0.4em 0; }
+.nota.aviso { border-color: var(--aviso); background: var(--aviso-suave); }
+.nota.ok { border-color: var(--ok); background: var(--ok-suave); }
+
+.error-comun {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--error);
+  border-radius: 0 var(--radio) var(--radio) 0;
+  padding: 10px 16px;
+  margin: 12px 0;
+}
+
+.error-comun p { margin: 0.3em 0; }
+
+/* ---------- Ejercicios ---------- */
+
+.ejercicio {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 12px 16px;
+  margin: 14px 0;
+}
+
+.ejercicio p { margin: 0.3em 0; }
+
+details summary {
+  cursor: pointer;
+  color: var(--acento);
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+details[open] summary { margin-bottom: 6px; }
+
+/* ---------- Recorrido animado (motor en recorrido.js) ---------- */
+
+.recorrido {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 16px;
+  margin: 1.4em 0;
+}
+
+.recorrido:focus { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+.escenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.escenario {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.escenario[aria-pressed="true"] {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--sobre-acento);
+}
+
+.escena { overflow-x: auto; }
+
+.recorrido-numero {
+  color: var(--texto-suave);
+  font-size: 0.85rem;
+  margin: 14px 0 0;
+}
+
+.recorrido-titulo { margin: 0.2em 0 0.3em; font-size: 1.1rem; }
+
+.recorrido-texto p { margin: 0.4em 0; }
+
+.recorrido-progreso {
+  height: 4px;
+  background: var(--superficie-2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.recorrido-progreso > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--acento);
+  transition: width 0.3s ease;
+}
+
+.recorrido-controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.boton {
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.boton.primario {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--sobre-acento);
+  font-weight: 600;
+}
+
+.boton:disabled { opacity: 0.4; cursor: default; }
+
+.ayuda-teclado { color: var(--texto-suave); font-size: 0.82rem; align-self: center; }
+
+.detalle { margin-top: 12px; }
+.detalle-titulo { font-size: 0.85rem; color: var(--texto-suave); margin: 0 0 4px; }
+.detalle pre { margin: 0; }
+
+/* ---------- Diagramas SVG ---------- */
+
+.diagrama { display: block; width: 100%; min-width: 720px; height: auto; }
+
+.diagrama text { font-family: var(--fuente); fill: var(--texto); }
+.diagrama .titulo-nodo { font-size: 16px; font-weight: 700; }
+.diagrama .sub { font-size: 12.5px; fill: var(--texto-suave); }
+.diagrama .etiqueta-zona { font-size: 12.5px; fill: var(--texto-suave); font-weight: 600; }
+
+.diagrama .zona {
+  fill: none;
+  stroke: var(--borde);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+}
+
+.diagrama .linea { stroke: var(--borde); stroke-width: 2; }
+.diagrama .pista { stroke: var(--borde); stroke-width: 1.5; stroke-dasharray: 2 6; }
+
+.nodo rect {
+  fill: var(--superficie);
+  stroke: var(--borde);
+  stroke-width: 1.5;
+  transition: fill 0.3s, stroke 0.3s;
+}
+
+.nodo.activo rect { fill: var(--acento-suave); stroke: var(--acento); stroke-width: 3; }
+.nodo.ok rect { fill: var(--ok-suave); stroke: var(--ok); stroke-width: 3; }
+.nodo.error rect { fill: var(--error-suave); stroke: var(--error); stroke-width: 3; }
+
+.paquete { transition: transform 0.7s ease; }
+.paquete rect { fill: var(--acento); }
+.paquete text { fill: var(--sobre-acento); font-size: 13px; font-weight: 600; }
+.paquete.ok rect { fill: var(--ok); }
+.paquete.error rect { fill: var(--error); }
+
+/* ---------- Mensajes HTTP (módulo 01) ---------- */
+
+.mensajes {
+  display: grid;
+  /* minmax(0, 1fr) evita que una línea larga dentro de <pre> ensanche toda la página */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.mensaje { min-width: 0; }
+
+.mensaje h4 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--texto-suave);
+}
+
+/* Las líneas largas (cuerpos JSON) se parten en lugar de obligar a desplazarse de costado */
+.mensaje pre { min-height: 220px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.parte { border-radius: 4px; transition: opacity 0.3s, background 0.3s; }
+.parte.pendiente { opacity: 0.18; }
+.parte.actual { background: var(--resaltado); outline: 2px solid var(--aviso); }
+.parte-vacia { color: var(--texto-suave); font-style: italic; }
+
+.cable {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 6px;
+  background: var(--superficie-2);
+  position: relative;
+  overflow: hidden;
+}
+
+.cable > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  background: var(--acento);
+  border-radius: 6px;
+}
+
+.cable.viajando > span { animation: viaje 1.2s ease forwards; }
+.cable.vuelta > span { animation: viaje 1.2s ease forwards; background: var(--ok); }
+.cable.vuelta.error > span { background: var(--error); }
+
+@keyframes viaje { from { width: 0; } to { width: 100%; } }
+
+/* ---------- Índice general ---------- */
+
+.tarjetas { display: grid; gap: 12px; margin-top: 20px; }
+
+.tarjeta {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 4px 14px;
+  align-items: center;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--texto);
+}
+
+a.tarjeta:hover { border-color: var(--acento); box-shadow: var(--sombra); }
+
+.tarjeta .numero {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--acento);
+  grid-row: span 2;
+}
+
+.tarjeta .nombre { font-weight: 700; }
+.tarjeta .pregunta { color: var(--texto-suave); font-size: 0.93rem; grid-column: 2; }
+
+.estado {
+  font-size: 0.8rem;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  grid-row: span 2;
+}
+
+.estado.disponible { background: var(--ok-suave); color: var(--ok); }
+.estado.pendiente { background: var(--superficie-2); color: var(--texto-suave); }
+
+.tarjeta.bloqueada { opacity: 0.65; }
+
+/* ---------- Pantallas chicas ---------- */
+
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  main { padding: 16px 16px 60px; }
+  h1 { font-size: 1.6rem; }
+  .mensajes { grid-template-columns: minmax(0, 1fr); }
+  .tarjeta { grid-template-columns: 40px 1fr; }
+  .estado { grid-row: auto; grid-column: 2; justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  .cable.viajando > span, .cable.vuelta > span { width: 100%; }
+}

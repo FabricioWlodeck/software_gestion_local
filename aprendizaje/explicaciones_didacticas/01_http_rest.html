@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTTP y REST</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 01</span><span>75 min</span><span>Código: <code>aprendizaje/etapas/01_http</code></span></p>
+    <h1>HTTP y REST: el idioma entre el frontend y el backend</h1>
+    <p>Cómo se arma una petición y una respuesta, qué significa cada parte y cómo se organizan las rutas de una API.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    El frontend de Punto Lácteo corre en el navegador y está escrito en TypeScript. El backend corre en el servidor
+    y está escrito en Python. Son dos programas separados, que no comparten memoria ni lenguaje, y a veces ni
+    siquiera la misma máquina. Aun así, la pantalla de ventas tiene que pedirle la lista de productos al backend y
+    entender la respuesta.
+  </p>
+  <p>
+    Hace falta un idioma común con tres niveles. HTTP define el «sobre», es decir, cómo se arman un pedido y una
+    respuesta. JSON define el «contenido», o sea, cómo se escriben los datos dentro del sobre. REST es una
+    convención para nombrar las rutas, de modo que cualquiera pueda adivinar qué hace cada una.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Petición y respuesta</h3>
+  <p>
+    HTTP (<em>HyperText Transfer Protocol</em> o Protocolo de Transferencia de Hipertexto) funciona siempre igual:
+    el cliente envía una petición y el servidor contesta con una respuesta. El servidor nunca habla primero. En
+    HTTP/1.1, la versión que usa la etapa de este módulo, los dos mensajes son texto plano con cuatro partes
+    (<strong>Figura 1</strong> y <strong>Tabla 1</strong>).
+  </p>
+
+  <figure>
+    <div class="mensajes">
+      <div class="mensaje">
+        <h4>Petición (cliente → servidor)</h4>
+<pre><code>POST /productos HTTP/1.1
+Host: 127.0.0.1:8000
+Accept-Encoding: identity
+Content-Length: 72
+Accept: application/json
+Content-Type: application/json
+
+{"nombre": "Yogur bebible 1 L", "unidad": "unidad", "precio": "2300.00"}</code></pre>
+      </div>
+      <div class="mensaje">
+        <h4>Respuesta (servidor → cliente)</h4>
+<pre><code>HTTP/1.1 201 Created
+Server: BaseHTTP/0.6 Python/3.12.10
+Date: Fri, 30 Oct 2026 03:56:09 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 81
+Location: /productos/4
+
+{"id": 4, "nombre": "Yogur bebible 1 L", "unidad": "unidad", "precio": "2300.00"}</code></pre>
+      </div>
+    </div>
+    <figcaption>Figura 1. Petición para crear un producto y respuesta del servidor, tal como las imprime <code>servidor.py</code>.</figcaption>
+  </figure>
+
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Parte</th><th>En la petición</th><th>En la respuesta</th></tr></thead>
+      <tbody>
+        <tr><td>Primera línea</td><td>Método, ruta y versión: <code>POST /productos HTTP/1.1</code></td><td>Versión, código y frase de estado: <code>HTTP/1.1 201 Created</code></td></tr>
+        <tr><td>Headers</td><td>Datos sobre el pedido: a qué servidor va, en qué formato viene el cuerpo, quién pide</td><td>Datos sobre la respuesta: formato, tamaño, dónde quedó lo creado</td></tr>
+        <tr><td>Línea en blanco</td><td colspan="2">Marca el fin de los headers. Todo lo que sigue es el cuerpo.</td></tr>
+        <tr><td>Cuerpo</td><td>Los datos que se envían. Es opcional: un <code>GET</code> no lleva.</td><td>Los datos que se devuelven. Es opcional: un 204 no lleva.</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Las cuatro partes de un mensaje HTTP.</figcaption>
+  </div>
+
+  <h3>2.2 HTTP no tiene memoria</h3>
+  <p>
+    HTTP es un protocolo sin estado (<em>stateless</em>): cada petición se entiende sola y el servidor no recuerda
+    las anteriores. Por eso, si una ruta exige identificarse, la credencial viaja en cada petición y no solo en la
+    primera. Ese es el papel del header <code>Authorization</code> de la sección 2.7.
+  </p>
+
+  <h3>2.3 Headers principales</h3>
+  <p>Los headers son pares «nombre: valor». La <strong>Tabla 2</strong> reúne los que aparecen en la etapa 01.</p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Header</th><th>Lo envía</th><th>Para qué sirve</th><th>Ejemplo</th></tr></thead>
+      <tbody>
+        <tr><td><code>Host</code></td><td>Cliente</td><td>Indica a qué servidor y puerto va el pedido. Una misma máquina puede atender varios sitios.</td><td><code>127.0.0.1:8000</code></td></tr>
+        <tr><td><code>Content-Type</code></td><td>Ambos</td><td>Indica el formato del cuerpo.</td><td><code>application/json</code></td></tr>
+        <tr><td><code>Content-Length</code></td><td>Ambos</td><td>Indica el tamaño del cuerpo en bytes, para que el receptor sepa dónde termina.</td><td><code>72</code></td></tr>
+        <tr><td><code>Accept</code></td><td>Cliente</td><td>Indica el formato en el que el cliente prefiere la respuesta.</td><td><code>application/json</code></td></tr>
+        <tr><td><code>Authorization</code></td><td>Cliente</td><td>Lleva la credencial de quien pide.</td><td><code>Bearer token-de-prueba-123</code></td></tr>
+        <tr><td><code>Location</code></td><td>Servidor</td><td>Indica la dirección del recurso recién creado.</td><td><code>/productos/4</code></td></tr>
+        <tr><td><code>WWW-Authenticate</code></td><td>Servidor</td><td>Acompaña a un 401 e indica qué tipo de credencial se espera.</td><td><code>Bearer</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Headers usados en la etapa 01.</figcaption>
+  </div>
+
+  <h3>2.4 JSON, el contenido</h3>
+  <p>
+    JSON (<em>JavaScript Object Notation</em> o Notación de Objetos de JavaScript) es el formato del cuerpo. Tiene
+    seis tipos de valores: objetos <code>{...}</code>, listas <code>[...]</code>, textos entre comillas dobles,
+    números, <code>true</code>/<code>false</code> y <code>null</code>. En Python, <code>json.loads</code> convierte
+    un texto JSON en un <code>dict</code> y <code>json.dumps</code> hace lo contrario. En JavaScript, las funciones
+    equivalentes son <code>JSON.parse</code> y <code>JSON.stringify</code>.
+  </p>
+  <div class="nota aviso">
+    <p><strong>¿Por qué el precio viaja entre comillas?</strong></p>
+    <p>
+      En JavaScript todos los números son de punto flotante, y en punto flotante <code>0.1 + 0.2</code> da
+      <code>0.30000000000000004</code>. Con dinero, ese error se acumula venta tras venta. Por eso el precio viaja
+      como texto (<code>"12500.00"</code>) y cada lado lo convierte a un tipo decimal exacto, que en Python es
+      <code>Decimal</code>. FastAPI hace lo mismo con los campos de tipo <code>Decimal</code>. Además, JSON usa
+      siempre punto decimal: la coma de «0,350 kg» es solo para mostrar en pantalla.
+    </p>
+  </div>
+
+  <h3>2.5 REST: cómo se nombran las rutas</h3>
+  <p>
+    REST (<em>Representational State Transfer</em> o Transferencia de Estado Representacional) es un estilo para
+    diseñar APIs sobre HTTP. La URL nombra una cosa, llamada <strong>recurso</strong> (por ejemplo, un producto), y
+    el método dice qué se hace con ella. Las URL llevan sustantivos y los métodos son los verbos
+    (<strong>Tabla 3</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Método</th><th>Qué hace</th><th>Ejemplo en Punto Lácteo</th><th>¿Seguro?</th><th>¿Idempotente?</th><th>Respuesta típica</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET</code></td><td>Lee</td><td><code>GET /productos</code> (todos)<br><code>GET /productos/1</code> (uno)</td><td>Sí</td><td>Sí</td><td>200 OK</td></tr>
+        <tr><td><code>POST</code></td><td>Crea</td><td><code>POST /productos</code></td><td>No</td><td>No</td><td>201 Created</td></tr>
+        <tr><td><code>PUT</code></td><td>Reemplaza completo</td><td><code>PUT /productos/1</code></td><td>No</td><td>Sí</td><td>200 OK</td></tr>
+        <tr><td><code>PATCH</code></td><td>Modifica una parte</td><td><code>PATCH /productos/1</code> con <code>{"precio": "13000.00"}</code></td><td>No</td><td>No necesariamente</td><td>200 OK</td></tr>
+        <tr><td><code>DELETE</code></td><td>Borra</td><td><code>DELETE /productos/1</code></td><td>No</td><td>Sí</td><td>204 No Content</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 3. Métodos HTTP y su uso en una API REST. La etapa 01 implementa GET, POST y DELETE.</figcaption>
+  </div>
+  <p>
+    Un método es <strong>seguro</strong> si no modifica datos, así que se puede llamar sin miedo. Es
+    <strong>idempotente</strong> si repetirlo varias veces deja el mismo estado que hacerlo una vez. La diferencia
+    importa cuando falla la red. Si la cajera toca «Cobrar», la conexión se corta y no llega la respuesta,
+    reintentar un <code>DELETE</code> es inofensivo, pero reintentar un <code>POST</code> puede registrar la venta
+    dos veces.
+  </p>
+  <p>
+    Sin una convención, cada API inventa sus nombres: <code>/crearProducto</code>,
+    <code>/borrarProducto?id=7</code>, <code>/obtenerTodosLosProductos</code>. Con REST, las mismas acciones son
+    <code>POST /productos</code>, <code>DELETE /productos/7</code> y <code>GET /productos</code>. Los filtros van
+    como parámetros de consulta (<em>query parameters</em>) después del signo <code>?</code>, por ejemplo
+    <code>GET /ventas?fecha=2026-10-30</code>.
+  </p>
+
+  <h3>2.6 Códigos de estado</h3>
+  <p>
+    El código de estado es un número de tres cifras que resume el resultado. La primera cifra indica la familia:
+    2xx significa que salió bien, 3xx que hay que ir a otra dirección, 4xx que el error es de quien pidió y 5xx que
+    el error es del servidor (<strong>Tabla 4</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Código</th><th>Cuándo se usa</th><th>Dónde aparece</th></tr></thead>
+      <tbody>
+        <tr><td>200 OK</td><td>Una lectura o modificación salió bien.</td><td>Etapa 01</td></tr>
+        <tr><td>201 Created</td><td>Se creó un recurso. Suele traer el header <code>Location</code>.</td><td>Etapa 01</td></tr>
+        <tr><td>204 No Content</td><td>Salió bien y no hay nada que devolver.</td><td>Etapa 01</td></tr>
+        <tr><td>400 Bad Request</td><td>Los datos están mal formados o no son válidos.</td><td>Etapa 01</td></tr>
+        <tr><td>401 Unauthorized</td><td>Falta la credencial o no es válida: el servidor no sabe quién pide.</td><td>Etapa 01</td></tr>
+        <tr><td>403 Forbidden</td><td>El servidor sabe quién pide, pero esa persona no tiene permiso.</td><td>Módulo 06</td></tr>
+        <tr><td>404 Not Found</td><td>El recurso o la ruta no existen.</td><td>Etapa 01</td></tr>
+        <tr><td>409 Conflict</td><td>El pedido choca con el estado actual de los datos, por ejemplo una venta sin stock.</td><td>Módulo 03</td></tr>
+        <tr><td>422 Unprocessable Entity</td><td>FastAPI lo usa cuando los datos no cumplen el schema.</td><td>Módulo 02</td></tr>
+        <tr><td>500 Internal Server Error</td><td>El servidor falló por un error de programación o de infraestructura.</td><td>Cualquier módulo, si algo se rompe</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 4. Códigos de estado usados en el material.</figcaption>
+  </div>
+
+  <h3>2.7 Primera mirada al token <em>Bearer</em></h3>
+  <p>
+    Para borrar un producto, la etapa 01 exige el header <code>Authorization: Bearer token-de-prueba-123</code>.
+    <em>Bearer</em> significa «portador»: el servidor deja pasar a quien porte el token, sin preguntar nada más.
+    Funciona como la entrada de un recital, donde quien la tiene, entra. Por eso el token se cuida como una
+    contraseña.
+  </p>
+  <p>
+    En esta etapa el token es un texto fijo escrito en el código, solo para ver cómo viaja. Además, todo viaja sin
+    cifrar, y por eso se puede leer en la terminal. En producción se usa HTTPS (<em>HTTP Secure</em> o HTTP
+    Seguro), que cifra el mensaje completo. En el módulo 06 el token fijo se reemplaza por un JWT (<em>JSON Web
+    Token</em> o Token Web JSON), que el servidor genera al iniciar sesión, firma y hace vencer.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>
+    El código está en <code>aprendizaje/etapas/01_http</code>. El servidor usa <code>http.server</code>, el módulo de
+    la biblioteca estándar de Python para servidores HTTP básicos. No se usa FastAPI a propósito: así queda a la
+    vista todo el trabajo que un framework hace por detrás.
+  </p>
+
+  <p>Python mira el método de la primera línea y llama a <code>do_GET</code>, <code>do_POST</code> o <code>do_DELETE</code>. Dentro de cada uno, la ruta se separa a mano:</p>
+  <pre><code>def do_GET(self):
+    self._registrar_peticion()
+
+    if self.path == "/productos":
+        return self._responder(HTTPStatus.OK, list(productos.values()))
+
+    coincidencia = RUTA_PRODUCTO.match(self.path)      # /productos/&lt;número&gt;
+    if coincidencia:
+        producto = productos.get(int(coincidencia.group(1)))
+        if producto is None:
+            return self._responder(HTTPStatus.NOT_FOUND, {"detail": "Producto no encontrado"})
+        return self._responder(HTTPStatus.OK, producto)
+
+    self._responder(HTTPStatus.NOT_FOUND, {"detail": "Ruta no encontrada"})</code></pre>
+
+  <p>Para crear, el cuerpo se convierte de texto JSON a <code>dict</code> y se valida campo por campo:</p>
+  <pre><code>try:
+    datos = json.loads(self.cuerpo)
+except json.JSONDecodeError:
+    return self._responder(HTTPStatus.BAD_REQUEST, {"detail": "El cuerpo no es JSON válido"})
+
+errores = validar_producto(datos)
+if errores:
+    return self._responder(HTTPStatus.BAD_REQUEST, {"detail": errores})</code></pre>
+
+  <p>Cada respuesta se arma en el mismo orden que la Tabla 1: línea de estado, headers, línea en blanco y cuerpo:</p>
+  <pre><code>self.send_response(codigo)                                   # línea de estado
+self.send_header("Content-Type", "application/json; charset=utf-8")
+self.send_header("Content-Length", str(len(cuerpo)))
+self.end_headers()                                           # línea en blanco
+self.wfile.write(cuerpo)                                     # cuerpo</code></pre>
+
+  <p>Se ejecuta con dos terminales abiertas en la carpeta de la etapa. El <code>README.md</code> de la etapa explica también cómo probar con el navegador y con <code>curl.exe</code>.</p>
+  <pre><code>python servidor.py      # terminal 1: queda esperando peticiones
+python cliente.py       # terminal 2: envía los casos de a uno</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    Todo lo que esta etapa hace a mano lo hace otra pieza en los módulos siguientes (<strong>Tabla 5</strong>). Las
+    rutas y los campos se mantienen en el módulo 02, así que se puede comparar el mismo pedido contra los dos
+    servidores.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>En la etapa 01, a mano</th><th>Después lo hace</th><th>Módulo</th></tr></thead>
+      <tbody>
+        <tr><td>Separar rutas con <code>if</code> y expresiones regulares</td><td>Los decoradores de FastAPI, como <code>@app.get("/productos/{id}")</code></td><td>02</td></tr>
+        <tr><td><code>json.loads</code> + <code>validar_producto()</code></td><td>Los schemas de Pydantic, con error 422 automático</td><td>02</td></tr>
+        <tr><td><code>json.dumps</code> y los headers escritos a mano</td><td>FastAPI, que convierte a JSON lo que devuelve la función</td><td>02</td></tr>
+        <tr><td>El diccionario <code>productos</code> en memoria</td><td>Las tablas de MariaDB</td><td>04 y 05</td></tr>
+        <tr><td>El token fijo comparado como texto</td><td>Un JWT firmado y con vencimiento</td><td>06</td></tr>
+        <tr><td><code>cliente.py</code> con <code>http.client</code></td><td><code>fetch()</code> dentro de React</td><td>09</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 5. Qué pieza reemplaza a cada parte del código de la etapa 01.</figcaption>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: anatomía de una petición</h2>
+  <p>
+    Se elige uno de los seis casos y se avanza paso a paso. Los mensajes son exactamente los que imprime
+    <code>servidor.py</code> al ejecutar <code>cliente.py</code>; solo la fecha cambia en cada ejecución. Las
+    anotaciones grises entre paréntesis no forman parte del mensaje.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="listar" aria-pressed="true">GET /productos</button>
+      <button type="button" class="escenario" data-escenario="noExiste" aria-pressed="false">GET /productos/99</button>
+      <button type="button" class="escenario" data-escenario="crear" aria-pressed="false">POST válido</button>
+      <button type="button" class="escenario" data-escenario="invalido" aria-pressed="false">POST inválido</button>
+      <button type="button" class="escenario" data-escenario="sinToken" aria-pressed="false">DELETE sin token</button>
+      <button type="button" class="escenario" data-escenario="conToken" aria-pressed="false">DELETE con Bearer</button>
+    </div>
+
+    <div class="escena">
+      <div class="mensajes">
+        <div class="mensaje">
+          <h4>Petición (cliente.py → servidor.py)</h4>
+          <pre><code id="peticion"></code></pre>
+        </div>
+        <div class="mensaje">
+          <h4>Respuesta (servidor.py → cliente.py)</h4>
+          <pre><code id="respuesta"></code></pre>
+        </div>
+        <div class="cable" id="cable" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
+
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle">
+      <p class="detalle-titulo" id="detalle-titulo"></p>
+      <pre><code id="detalle-codigo"></code></pre>
+    </div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Usar GET para acciones que modifican datos.</strong></p>
+    <p>Una ruta como <code>GET /productos/2/borrar</code> rompe la promesa de que GET es seguro. Los navegadores y otras herramientas pueden repetir o precargar peticiones GET por su cuenta, y un simple enlace terminaría borrando productos.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Responder 200 a todo y poner el error en el cuerpo.</strong></p>
+    <p>Con <code>200 {"ok": false}</code>, el cliente tiene que leer el texto para saber si algo falló. Los códigos de estado existen justamente para eso, y todas las herramientas (el navegador, <code>fetch</code>, los registros del servidor) los entienden.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Confundir 401 con 403.</strong></p>
+    <p>401 significa que el servidor no sabe quién pide. 403 significa que lo sabe y esa persona no tiene permiso. Un empleado identificado que intenta anular una venta recibe 403.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escribir decimales con coma dentro del JSON.</strong></p>
+    <p><code>{"precio": 12500,50}</code> no es JSON válido: la coma separa elementos. El servidor de la etapa responde 400 con «El cuerpo no es JSON válido».</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Usar verbos en las rutas.</strong></p>
+    <p><code>/crearProducto</code> o <code>/borrarProducto</code> repiten en la URL lo que ya dice el método. En REST la ruta es el recurso y el método es la acción.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escribir <code>curl</code> en lugar de <code>curl.exe</code> en Windows PowerShell.</strong></p>
+    <p>En Windows PowerShell, <code>curl</code> es un alias de <code>Invoke-WebRequest</code>, que usa otras opciones. <code>curl.exe</code> ejecuta el curl real que viene con Windows.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Ejecutá <code>cliente.py</code> dos veces sin reiniciar el servidor. ¿Qué cambia en el caso 6 la segunda vez? ¿Sigue siendo <code>DELETE</code> idempotente?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>La segunda vez el caso 6 responde 404, porque el producto 2 ya se borró. La respuesta cambia, pero el estado final es el mismo: el producto 2 no existe. La idempotencia se refiere al estado del servidor, no al código de respuesta.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Implementá <code>PATCH /productos/{id}</code> para cambiar solo el precio de un producto. ¿Qué código devolvés si el producto no existe? ¿Y si el precio no es válido? ¿Debería pedir token?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Se agrega un método <code>do_PATCH</code>. Responde 404 si el producto no existe, 400 si el precio no es válido y 200 con el producto actualizado si salió bien. Como modifica datos, conviene exigir el mismo token que <code>DELETE</code>. Un esqueleto posible:</p>
+      <pre><code>def do_PATCH(self):
+    self._registrar_peticion()
+    coincidencia = RUTA_PRODUCTO.match(self.path)
+    # 1. ¿la ruta es /productos/&lt;n&gt;?  → si no, 404
+    # 2. ¿trae Authorization: Bearer ...?  → si no, 401
+    # 3. ¿existe el producto?  → si no, 404
+    # 4. ¿el precio es un Decimal mayor que cero?  → si no, 400
+    # 5. actualizar y responder 200 con el producto</code></pre>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Sin ejecutar nada, ¿qué código de estado corresponde a cada caso? (a) La dueña pide <code>/ventas?fecha=2026-13-45</code>. (b) Un empleado con un token válido intenta borrar un producto y no tiene permiso. (c) Se intenta vender más queso del que hay. (d) El backend intenta conectarse a la base de datos y está apagada.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>(a) 400, porque la fecha no es válida; FastAPI respondería 422. (b) 403, porque se sabe quién pide pero no tiene permiso. (c) 409, porque el pedido choca con el stock actual. (d) 500 (o 503, <em>Service Unavailable</em>), porque el error es del servidor y no de quien pidió.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Creá el archivo <code>ejemplos/roto.json</code> con el texto <code>{"nombre": "Queso"</code> (sin cerrar la llave) y envialo con <code>curl.exe</code>. ¿Qué responde el servidor y qué línea de <code>servidor.py</code> lo decide?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Responde 400 con <code>{"detail": "El cuerpo no es JSON válido"}</code>. Lo decide el bloque <code>except json.JSONDecodeError</code> de <code>do_POST</code>: <code>json.loads</code> no puede convertir el texto y lanza esa excepción.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>5.</strong> Abrí <a href="http://127.0.0.1:8000/productos">http://127.0.0.1:8000/productos</a> en el navegador con el servidor levantado y mirá su terminal. ¿Qué headers manda el navegador que <code>cliente.py</code> no manda? ¿Aparece alguna petición que no pediste?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El navegador agrega, entre otros, <code>User-Agent</code> (qué navegador es), <code>Accept-Language</code> (idiomas preferidos) y un <code>Accept</code> con varios formatos. Además, suele pedir por su cuenta <code>GET /favicon.ico</code>, el ícono de la pestaña, que el servidor responde con 404 «Ruta no encontrada».</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/Overview">MDN Web Docs: generalidades del protocolo HTTP</a></li>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/Messages">MDN Web Docs: mensajes HTTP</a></li>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/Methods">MDN Web Docs: métodos de petición HTTP</a></li>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/Status">MDN Web Docs: códigos de estado de respuesta HTTP</a></li>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/Headers/Authorization">MDN Web Docs: header Authorization</a></li>
+    <li><a href="https://docs.python.org/es/3.12/library/http.server.html">Python: módulo <code>http.server</code></a></li>
+    <li><a href="https://docs.python.org/es/3.12/library/http.client.html">Python: módulo <code>http.client</code></a></li>
+    <li><a href="https://docs.python.org/es/3.12/library/json.html">Python: módulo <code>json</code></a></li>
+    <li><a href="https://www.json.org/json-es.html">JSON: especificación del formato</a></li>
+    <li><a href="https://www.rfc-editor.org/rfc/rfc9110">RFC 9110: semántica de HTTP (la norma formal, en inglés)</a></li>
+  </ul>
+
+  <p style="margin-top:3em"><a href="00_mapa_general.html">← Anterior: Módulo 00, mapa general</a></p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // Headers que agrega cada lado por su cuenta (salen de la ejecución real de la etapa).
+  const HEADERS_CLIENTE = ["Host: 127.0.0.1:8000", "Accept-Encoding: identity"];
+  const HEADERS_SERVIDOR = ["Server: BaseHTTP/0.6 Python/3.12.10", "Date: Fri, 30 Oct 2026 03:56:09 GMT"];
+  const JSON_UTF8 = "Content-Type: application/json; charset=utf-8";
+
+  const LISTA_INICIAL = '[{"id": 1, "nombre": "Queso cremoso", "unidad": "kg", "precio": "12500.00"}, {"id": 2, "nombre": "Leche entera 1 L", "unidad": "unidad", "precio": "1450.00"}, {"id": 3, "nombre": "Salame milán", "unidad": "kg", "precio": "18900.00"}]';
+  const PRODUCTO_NUEVO = '{"nombre": "Yogur bebible 1 L", "unidad": "unidad", "precio": "2300.00"}';
+  const PRODUCTO_INVALIDO = '{"nombre": "", "unidad": "litro", "precio": "-5"}';
+
+  /*
+   * Cada caso describe la petición, la respuesta y los textos propios del caso.
+   * Los pasos se generan con la misma plantilla para todos (construirPasos).
+   */
+  const CASOS = {
+    listar: {
+      cliente: 'conexion.request("GET", "/productos", body=None,\n                 headers={"Accept": "application/json"})',
+      peticion: {
+        linea: "GET /productos HTTP/1.1",
+        headers: [...HEADERS_CLIENTE, "Accept: application/json"],
+        cuerpo: "",
+      },
+      respuesta: {
+        linea: "HTTP/1.1 200 OK",
+        headers: [...HEADERS_SERVIDOR, JSON_UTF8, "Content-Length: 234"],
+        cuerpo: LISTA_INICIAL,
+      },
+      servidor: `def do_GET(self):
+    self._registrar_peticion()
+
+    if self.path == "/productos":
+        return self._responder(HTTPStatus.OK, list(productos.values()))`,
+      textos: {
+        linea: "<code>GET</code> pide leer. La ruta <code>/productos</code> nombra la colección completa de productos.",
+        headers: "<code>Accept: application/json</code> avisa que el cliente quiere la respuesta en JSON. Ese header lo puso <code>cliente.py</code>.",
+        servidor: "Python ve el método GET y llama a <code>do_GET</code>. La ruta coincide exactamente con <code>/productos</code>, así que el servidor responde con todos los productos del diccionario.",
+        estado: "<code>200 OK</code>: la lectura salió bien.",
+        headersResp: "<code>Content-Length: 234</code> es la cantidad de bytes del cuerpo. Con ese número el cliente sabe dónde termina la respuesta.",
+        cuerpoResp: "Una lista JSON con los tres productos. El precio viaja como texto para no perder precisión.",
+      },
+    },
+
+    noExiste: {
+      cliente: 'conexion.request("GET", "/productos/99", body=None,\n                 headers={"Accept": "application/json"})',
+      peticion: {
+        linea: "GET /productos/99 HTTP/1.1",
+        headers: [...HEADERS_CLIENTE, "Accept: application/json"],
+        cuerpo: "",
+      },
+      respuesta: {
+        linea: "HTTP/1.1 404 Not Found",
+        headers: [...HEADERS_SERVIDOR, JSON_UTF8, "Content-Length: 36"],
+        cuerpo: '{"detail": "Producto no encontrado"}',
+      },
+      servidor: `coincidencia = RUTA_PRODUCTO.match(self.path)
+if coincidencia:
+    producto = productos.get(int(coincidencia.group(1)))   # 99
+    if producto is None:
+        return self._responder(HTTPStatus.NOT_FOUND, {"detail": "Producto no encontrado"})`,
+      textos: {
+        linea: "<code>GET /productos/99</code> pide un producto puntual. El número al final de la ruta identifica el recurso.",
+        headers: "Los headers son los mismos que en el caso anterior. Lo único que cambió es la ruta.",
+        servidor: "La expresión regular <code>RUTA_PRODUCTO</code> reconoce la forma <code>/productos/&lt;número&gt;</code> y extrae el 99. El diccionario no tiene esa clave, así que el servidor responde que no existe.",
+        estado: "<code>404 Not Found</code>: el recurso pedido no existe. Es un error de la familia 4xx porque el cliente pidió algo que no hay.",
+        headersResp: "Aunque sea un error, la respuesta tiene un cuerpo JSON y sus headers lo describen.",
+        cuerpoResp: "<code>detail</code> explica el motivo. FastAPI usa ese mismo nombre de campo en sus errores, y por eso se eligió acá.",
+      },
+    },
+
+    crear: {
+      cliente: 'cuerpo = json.dumps({"nombre": "Yogur bebible 1 L", ...}).encode("utf-8")\nconexion.request("POST", "/productos", body=cuerpo,\n                 headers={"Accept": "application/json",\n                          "Content-Type": "application/json"})',
+      peticion: {
+        linea: "POST /productos HTTP/1.1",
+        headers: [...HEADERS_CLIENTE, "Content-Length: 72", "Accept: application/json", "Content-Type: application/json"],
+        cuerpo: PRODUCTO_NUEVO,
+      },
+      respuesta: {
+        linea: "HTTP/1.1 201 Created",
+        headers: [...HEADERS_SERVIDOR, JSON_UTF8, "Content-Length: 81", "Location: /productos/4"],
+        cuerpo: '{"id": 4, "nombre": "Yogur bebible 1 L", "unidad": "unidad", "precio": "2300.00"}',
+      },
+      servidor: `datos = json.loads(self.cuerpo)        # texto JSON → dict de Python
+errores = validar_producto(datos)       # [] → no hay errores
+...
+productos[producto["id"]] = producto
+self._responder(HTTPStatus.CREATED, producto, {"Location": f"/productos/{producto['id']}"})`,
+      textos: {
+        linea: "<code>POST</code> pide crear. La ruta es la colección <code>/productos</code>, porque el producto nuevo todavía no tiene número: lo asigna el servidor.",
+        headers: "<code>Content-Type: application/json</code> avisa en qué formato viene el cuerpo, y <code>Content-Length: 72</code> cuántos bytes tiene. Este último lo calculó <code>http.client</code> por su cuenta.",
+        servidor: "Python llama a <code>do_POST</code>. El servidor convierte el texto JSON en un <code>dict</code> con <code>json.loads</code>, lo valida, le asigna el id 4 y lo guarda.",
+        estado: "<code>201 Created</code>: se creó un recurso nuevo. Es más preciso que un 200 genérico.",
+        headersResp: "<code>Location: /productos/4</code> indica dónde quedó el producto nuevo. Con un <code>GET</code> a esa ruta se lo puede volver a leer.",
+        cuerpoResp: "El servidor devuelve el producto tal como quedó guardado, con el id que le asignó.",
+      },
+    },
+
+    invalido: {
+      cliente: 'cuerpo = json.dumps({"nombre": "", "unidad": "litro", "precio": "-5"}).encode("utf-8")\nconexion.request("POST", "/productos", body=cuerpo,\n                 headers={"Accept": "application/json",\n                          "Content-Type": "application/json"})',
+      peticion: {
+        linea: "POST /productos HTTP/1.1",
+        headers: [...HEADERS_CLIENTE, "Content-Length: 49", "Accept: application/json", "Content-Type: application/json"],
+        cuerpo: PRODUCTO_INVALIDO,
+      },
+      respuesta: {
+        linea: "HTTP/1.1 400 Bad Request",
+        headers: [...HEADERS_SERVIDOR, JSON_UTF8, "Content-Length: 133"],
+        cuerpo: `{"detail": ["nombre: es obligatorio y no puede estar vacío", "unidad: debe ser 'kg' o 'unidad'", "precio: debe ser mayor que cero"]}`,
+      },
+      servidor: `errores = validar_producto(datos)
+# ["nombre: es obligatorio...", "unidad: debe ser 'kg' o 'unidad'",
+#  "precio: debe ser mayor que cero"]
+if errores:
+    return self._responder(HTTPStatus.BAD_REQUEST, {"detail": errores})`,
+      textos: {
+        linea: "La ruta y el método son los mismos que al crear un producto válido.",
+        headers: "Esta vez <code>Content-Length</code> vale 49, porque el cuerpo es más corto.",
+        servidor: "<code>validar_producto</code> revisa campo por campo y junta los tres errores en una lista. Devolverlos todos juntos le ahorra a la pantalla corregir de a uno.",
+        estado: "<code>400 Bad Request</code>: los datos no son válidos. FastAPI usa 422 para este caso (módulo 02). Los dos son de la familia 4xx porque el error está en el pedido.",
+        headersResp: "No hay header <code>Location</code>, porque no se creó nada.",
+        cuerpoResp: "La lista de errores. Cada mensaje empieza con el nombre del campo, para que la pantalla sepa cuál marcar.",
+      },
+    },
+
+    sinToken: {
+      cliente: 'conexion.request("DELETE", "/productos/2", body=None,\n                 headers={"Accept": "application/json"})',
+      peticion: {
+        linea: "DELETE /productos/2 HTTP/1.1",
+        headers: [...HEADERS_CLIENTE, "Accept: application/json"],
+        cuerpo: "",
+      },
+      respuesta: {
+        linea: "HTTP/1.1 401 Unauthorized",
+        headers: [...HEADERS_SERVIDOR, JSON_UTF8, "Content-Length: 59", "WWW-Authenticate: Bearer"],
+        cuerpo: '{"detail": "Falta el header Authorization: Bearer <token>"}',
+      },
+      servidor: `autorizacion = self.headers.get("Authorization")
+if autorizacion is None:
+    return self._responder(
+        HTTPStatus.UNAUTHORIZED,
+        {"detail": "Falta el header Authorization: Bearer <token>"},
+        {"WWW-Authenticate": "Bearer"},
+    )`,
+      textos: {
+        linea: "<code>DELETE /productos/2</code> pide borrar la leche entera.",
+        headers: "Falta el header <code>Authorization</code>, así que el servidor no tiene forma de saber quién pide.",
+        servidor: "<code>do_DELETE</code> busca el header <code>Authorization</code> antes de mirar si el producto existe. Verificar primero quién pide evita revelarle a un desconocido qué productos hay.",
+        estado: "<code>401 Unauthorized</code>: falta una credencial válida. A pesar del nombre, significa «no sé quién sos». El caso «sé quién sos y no tenés permiso» es el 403.",
+        headersResp: "<code>WWW-Authenticate: Bearer</code> le indica al cliente qué tipo de credencial se espera.",
+        cuerpoResp: "El motivo del rechazo, para quien lea el error.",
+      },
+    },
+
+    conToken: {
+      cliente: 'conexion.request("DELETE", "/productos/2", body=None,\n                 headers={"Accept": "application/json",\n                          "Authorization": "Bearer token-de-prueba-123"})',
+      peticion: {
+        linea: "DELETE /productos/2 HTTP/1.1",
+        headers: [...HEADERS_CLIENTE, "Accept: application/json", "Authorization: Bearer token-de-prueba-123"],
+        cuerpo: "",
+      },
+      respuesta: {
+        linea: "HTTP/1.1 204 No Content",
+        headers: [...HEADERS_SERVIDOR],
+        cuerpo: "",
+      },
+      servidor: `if autorizacion != f"Bearer {TOKEN_DE_PRUEBA}":
+    return self._responder(HTTPStatus.UNAUTHORIZED, ...)   # no entra: el token es correcto
+
+if productos.pop(int(coincidencia.group(1)), None) is None:
+    return self._responder(HTTPStatus.NOT_FOUND, ...)      # no entra: el 2 existía
+
+self._responder(HTTPStatus.NO_CONTENT)`,
+      textos: {
+        linea: "La petición es la misma que en el caso anterior.",
+        headers: "Ahora viaja <code>Authorization: Bearer token-de-prueba-123</code>. <em>Bearer</em> significa «portador»: quien porta el token, pasa. Como HTTP no tiene estado, este header tiene que ir en cada petición que lo necesite.",
+        servidor: "El header coincide con el token esperado. Recién entonces el servidor busca el producto 2, lo encuentra y lo borra.",
+        estado: "<code>204 No Content</code>: salió bien y no hay nada para devolver.",
+        headersResp: "Una respuesta 204 no lleva <code>Content-Type</code> ni <code>Content-Length</code>, porque no tiene cuerpo.",
+        cuerpoResp: "Si se repite la misma petición, la respuesta es 404 porque el producto ya no existe. El estado final es el mismo, y por eso <code>DELETE</code> es idempotente.",
+      },
+    },
+  };
+
+  // ---------- Plantilla de pasos, igual para todos los casos ----------
+  function construirPasos(caso) {
+    const conCuerpo = caso.peticion.cuerpo !== "";
+    const bytesCuerpo = new TextEncoder().encode(caso.peticion.cuerpo).length;
+    const pasosCliente = { titulo: "cliente.py · la llamada que genera esta petición", codigo: caso.cliente };
+    const pasosServidor = { titulo: "servidor.py · el código que decide la respuesta", codigo: caso.servidor };
+
+    return [
+      {
+        titulo: "Línea de petición",
+        texto: `<p>La primera línea tiene tres datos separados por espacios: el <strong>método</strong> (qué se quiere hacer), la <strong>ruta</strong> (sobre qué recurso) y la <strong>versión</strong> de HTTP.</p><p>${caso.textos.linea}</p>`,
+        orden: 1, detalle: pasosCliente,
+      },
+      {
+        titulo: "Headers de la petición",
+        texto: `<p>Cada header es un par «nombre: valor». <code>Host</code> y <code>Accept-Encoding</code> los agrega <code>http.client</code> por su cuenta.</p><p>${caso.textos.headers}</p>`,
+        orden: 2, detalle: pasosCliente,
+      },
+      {
+        titulo: "Línea en blanco y cuerpo",
+        texto: conCuerpo
+          ? `<p>La línea en blanco marca el fin de los headers. Después viene el cuerpo: ${bytesCuerpo} bytes de JSON, el mismo número que declara <code>Content-Length</code>.</p>`
+          : "<p>La línea en blanco marca el fin de los headers, y en este pedido no hay nada después. Los métodos GET y DELETE identifican el recurso con la ruta, así que no necesitan cuerpo.</p>",
+        orden: 3, detalle: pasosCliente,
+      },
+      {
+        titulo: "Viaje por la red",
+        texto: "<p>El texto se envía como bytes por una conexión TCP (<em>Transmission Control Protocol</em> o Protocolo de Control de Transmisión) a la dirección 127.0.0.1, puerto 8000. TCP garantiza que los bytes lleguen completos y en orden; HTTP solo define qué dicen.</p>",
+        orden: 4, cable: "ida", detalle: pasosCliente,
+      },
+      {
+        titulo: "El servidor decide",
+        texto: `<p>${caso.textos.servidor}</p>`,
+        orden: 5, cable: "ida", detalle: pasosServidor,
+      },
+      {
+        titulo: "Línea de estado",
+        texto: `<p>La respuesta empieza con la versión, el <strong>código de estado</strong> (tres cifras) y una frase que lo describe. El cliente decide qué hacer mirando el código, no la frase.</p><p>${caso.textos.estado}</p>`,
+        orden: 6, cable: "vuelta", detalle: pasosServidor,
+      },
+      {
+        titulo: "Headers de la respuesta",
+        texto: `<p><code>Server</code> y <code>Date</code> los agrega Python automáticamente.</p><p>${caso.textos.headersResp}</p>`,
+        orden: 7, cable: "vuelta", detalle: pasosServidor,
+      },
+      {
+        titulo: "Cuerpo de la respuesta",
+        texto: `<p>${caso.textos.cuerpoResp}</p>`,
+        orden: 8, cable: "vuelta", detalle: pasosServidor,
+      },
+    ];
+  }
+
+  // ---------- Dibujo de los mensajes ----------
+  const zonaPeticion = document.getElementById("peticion");
+  const zonaRespuesta = document.getElementById("respuesta");
+  const cable = document.getElementById("cable");
+  const detalleTitulo = document.getElementById("detalle-titulo");
+  const detalleCodigo = document.getElementById("detalle-codigo");
+
+  // Arma el mensaje con un <span> por parte; data-orden indica en qué paso se resalta.
+  function escribirMensaje(zona, mensaje, ordenes) {
+    zona.replaceChildren();
+    const agregar = (texto, orden, clase) => {
+      const parte = document.createElement("span");
+      parte.className = clase || "parte";
+      parte.dataset.orden = orden;
+      parte.textContent = texto;
+      zona.append(parte);
+    };
+    agregar(mensaje.linea + "\n", ordenes[0]);
+    agregar(mensaje.headers.join("\n") + "\n", ordenes[1]);
+    agregar("(línea en blanco)\n", ordenes[2], "parte parte-vacia");
+    if (mensaje.cuerpo) agregar(mensaje.cuerpo, ordenes[2]);
+    else agregar("(sin cuerpo)", ordenes[2], "parte parte-vacia");
+  }
+
+  let casoActual = null;
+
+  function dibujarPaso(paso) {
+    if (paso.caso !== casoActual) {
+      casoActual = paso.caso;
+      escribirMensaje(zonaPeticion, CASOS[paso.caso].peticion, [1, 2, 3]);
+      escribirMensaje(zonaRespuesta, CASOS[paso.caso].respuesta, [6, 7, 8]);
+    }
+
+    document.querySelectorAll(".mensajes .parte").forEach((parte) => {
+      const orden = Number(parte.dataset.orden);
+      parte.classList.toggle("pendiente", orden > paso.orden);
+      parte.classList.toggle("actual", orden === paso.orden);
+    });
+
+    // Solo se cambia la clase del cable si cambió, para no reiniciar la animación.
+    const esError = CASOS[paso.caso].respuesta.linea.match(/ [45]\d\d /);
+    const claseCable = ["cable", paso.cable === "ida" ? "viajando" : "", paso.cable === "vuelta" ? "vuelta" : "",
+      paso.cable === "vuelta" && esError ? "error" : ""].filter(Boolean).join(" ");
+    if (cable.className !== claseCable) cable.className = claseCable;
+
+    detalleTitulo.textContent = paso.detalle.titulo;
+    detalleCodigo.textContent = paso.detalle.codigo;
+  }
+
+  // Cada paso guarda a qué caso pertenece, para que dibujarPaso sepa qué mensajes mostrar.
+  const ESCENARIOS = {};
+  for (const [clave, caso] of Object.entries(CASOS)) {
+    ESCENARIOS[clave] = construirPasos(caso).map((paso) => ({ ...paso, caso: clave }));
+  }
+
+  const recorrido = crearRecorrido(document.getElementById("recorrido"), ESCENARIOS.listar, dibujarPaso);
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

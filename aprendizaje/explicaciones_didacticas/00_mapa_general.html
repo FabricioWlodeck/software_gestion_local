@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapa general</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 00</span><span>45 min</span><span>Sin código para ejecutar</span></p>
+    <h1>Mapa general: el viaje de una venta</h1>
+    <p>Qué piezas tiene un sistema web, qué hace cada una y por dónde pasa una venta desde el clic hasta la base de datos.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    Una cajera de Punto Lácteo pesa 0,350 kg de queso cremoso, carga el peso en la pantalla y toca
+    <strong>Cobrar</strong>. En una fracción de segundo, el sistema tiene que calcular el total, guardar la venta y
+    descontar el stock. Para que eso pase intervienen varios programas, que pueden estar en máquinas distintas y
+    están escritos en lenguajes distintos.
+  </p>
+  <p>
+    Este módulo dibuja el mapa de esas piezas. Los módulos siguientes estudian cada pieza por separado, y el mapa
+    sirve para no perder de vista dónde encaja cada una. Este módulo no tiene código para ejecutar.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+  <p>
+    Un sistema web se divide en piezas que tienen una sola responsabilidad cada una. La división más común, y la
+    que usa este proyecto, separa la interfaz, la lógica y los datos (<strong>Tabla 1</strong>). La pieza central
+    es la API (<em>Application Programming Interface</em> o Interfaz de Programación de Aplicaciones), que es el
+    conjunto de rutas que el backend ofrece para que otros programas le pidan cosas. La base de datos se consulta
+    con SQL (<em>Structured Query Language</em> o Lenguaje de Consulta Estructurado).
+  </p>
+
+  <div class="tabla">
+    <table>
+      <thead>
+        <tr><th>Pieza</th><th>Tecnología</th><th>Dónde se ejecuta</th><th>Responsabilidad</th><th>Módulos</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Frontend</td><td>React, Vite y TypeScript</td><td>En el navegador de la cajera</td><td>Mostrar pantallas, capturar lo que se escribe y pedirle cosas al backend</td><td>07, 08, 09</td></tr>
+        <tr><td>Protocolo</td><td>HTTP y JSON</td><td>Por la red</td><td>Transportar pedidos y respuestas en un formato que ambos lados entienden</td><td>01</td></tr>
+        <tr><td>Backend (la API)</td><td>FastAPI (Python)</td><td>En el servidor</td><td>Validar los datos, aplicar las reglas del negocio y decidir qué responder</td><td>02, 03, 06</td></tr>
+        <tr><td>Acceso a datos</td><td>SQLAlchemy</td><td>Dentro del backend</td><td>Traducir objetos de Python a consultas SQL y los resultados a objetos</td><td>05</td></tr>
+        <tr><td>Base de datos</td><td>MariaDB</td><td>En el servidor, dentro de un contenedor</td><td>Guardar los datos de forma permanente y consistente</td><td>04</td></tr>
+        <tr><td>Empaquetado</td><td>Docker Compose</td><td>En el servidor</td><td>Levantar todas las piezas juntas con una sola orden</td><td>10</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Piezas del sistema, dónde se ejecuta cada una y en qué módulo se estudia.</figcaption>
+  </div>
+
+  <h3>Por qué se divide en piezas</h3>
+  <p>
+    La primera razón es que cada pieza se puede cambiar sin tocar las otras, siempre que respete lo que las demás
+    esperan de ella. Si el sistema migra de MariaDB a PostgreSQL, cambia la capa de acceso a datos y la pantalla de
+    ventas no se entera.
+  </p>
+  <p>
+    La segunda razón es que cada pieza se entiende y se prueba por separado. Un total mal calculado se busca en el
+    backend, sin revisar el código de las pantallas.
+  </p>
+  <p>
+    La tercera razón es la seguridad, que depende de dónde se ejecuta cada cosa. El navegador está en manos del
+    usuario: cualquiera puede abrir las herramientas de desarrollo y modificar el código que corre ahí, o enviarle
+    peticiones a la API sin pasar por la pantalla. Por eso las reglas del negocio («no se vende más stock del que
+    hay», «un empleado no anula ventas») se aplican en el backend, que es el único lugar que el usuario no controla.
+  </p>
+
+  <div class="nota">
+    <p><strong>Regla de oro.</strong> El backend no confía en nada de lo que llega del frontend. El frontend puede
+    validar para dar una mejor experiencia, pero el backend vuelve a validar siempre.</p>
+  </div>
+
+  <h3>Las capas dentro del backend</h3>
+  <p>
+    El backend también se divide. El <strong>router</strong> recibe la petición y, con ayuda de Pydantic, comprueba
+    que los datos tengan la forma correcta. El <strong>service</strong> aplica las reglas del negocio y decide. La
+    capa de <strong>acceso a datos</strong> habla con la base. Cada capa solo llama a la de abajo. El módulo 03
+    explica qué se gana con esta división y qué se pierde si se mezcla todo en un solo archivo.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>
+    Este módulo no tiene código para ejecutar. Los fragmentos siguientes son una vista previa simplificada de cómo
+    se ve cada pieza. No hace falta entenderlos ahora; el objetivo es reconocerlos cuando aparezcan en su módulo.
+  </p>
+
+  <p>En el <strong>frontend</strong> (módulos 08 y 09), React envía la venta al backend con <code>fetch</code>:</p>
+  <pre><code>async function cobrar() {
+  const respuesta = await fetch("/ventas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ producto_id: 1, cantidad: "0.350" }),
+  });
+}</code></pre>
+
+  <p>En el <strong>backend</strong> (módulos 02 y 03), FastAPI asocia la ruta con una función y Pydantic define la forma de los datos:</p>
+  <pre><code>class VentaIn(BaseModel):
+    producto_id: int
+    cantidad: Decimal = Field(gt=0)   # gt = greater than (mayor que)
+
+@router.post("/ventas", status_code=201)
+def crear_venta(venta: VentaIn, servicio: VentaService = Depends()):
+    return servicio.registrar(venta)</code></pre>
+
+  <p>En el <strong>service</strong> (módulo 03) viven las reglas del negocio:</p>
+  <pre><code>def registrar(self, venta: VentaIn):
+    producto = self.repositorio.obtener_para_actualizar(venta.producto_id)
+    if producto.stock &lt; venta.cantidad:
+        raise StockInsuficiente(disponible=producto.stock)
+    ...</code></pre>
+
+  <p>En la <strong>base de datos</strong> (módulos 04 y 05), SQLAlchemy termina enviando SQL como este:</p>
+  <pre><code>START TRANSACTION;
+SELECT stock FROM producto WHERE id = 1 FOR UPDATE;
+INSERT INTO venta (producto_id, cantidad, total) VALUES (1, 0.350, 4375.00);
+UPDATE producto SET stock = stock - 0.350 WHERE id = 1;
+COMMIT;</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    Dos piezas se conectan a través de un <strong>contrato</strong>: un acuerdo sobre qué se envía, con qué formato
+    y qué se responde. Mientras el contrato se respete, cada lado puede cambiar por dentro sin romper al otro
+    (<strong>Tabla 2</strong>).
+  </p>
+
+  <div class="tabla">
+    <table>
+      <thead>
+        <tr><th>Conexión</th><th>Cómo se comunican</th><th>Qué fija el contrato</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Frontend → backend</td><td>Peticiones HTTP con cuerpo JSON</td><td>Las rutas (<code>POST /ventas</code>), los nombres de los campos y los códigos de respuesta</td></tr>
+        <tr><td>Router → service</td><td>Llamadas a funciones de Python</td><td>Qué datos recibe el service y qué errores puede lanzar</td></tr>
+        <tr><td>Service → acceso a datos</td><td>Llamadas a funciones de Python</td><td>Qué operaciones se ofrecen (obtener un producto, guardar una venta)</td></tr>
+        <tr><td>Acceso a datos → base</td><td>Consultas SQL por una conexión de red al puerto 3306</td><td>La cadena de conexión (usuario, contraseña, servidor, base) y el esquema de tablas</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Contratos entre las piezas del sistema.</figcaption>
+  </div>
+
+  <p>
+    El navegador nunca se conecta directamente con la base de datos. Si lo hiciera, la contraseña de la base
+    tendría que estar en el código del frontend, y cualquiera que abriera la página podría leerla. El backend es el
+    único intermediario autorizado.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: una venta de punta a punta</h2>
+  <p>
+    La animación recorre la venta paso a paso. Se puede elegir entre tres escenarios. El primero es una venta
+    normal, el segundo es una venta sin stock suficiente y el tercero es un pedido con datos inválidos. Comparar los
+    tres muestra qué capa frena cada problema.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="ok" aria-pressed="true">Venta normal (0,350 kg)</button>
+      <button type="button" class="escenario" data-escenario="sinStock" aria-pressed="false">Sin stock suficiente (3 kg)</button>
+      <button type="button" class="escenario" data-escenario="invalido" aria-pressed="false">Datos inválidos (−1 kg)</button>
+    </div>
+
+    <div class="escena">
+      <svg class="diagrama" viewBox="0 0 960 310" role="img" aria-label="Diagrama del recorrido de una venta entre navegador, backend y base de datos">
+        <!-- Zona de red -->
+        <line class="zona" x1="212" y1="70" x2="212" y2="290"/>
+        <line class="zona" x1="298" y1="70" x2="298" y2="290"/>
+        <text class="etiqueta-zona" x="255" y="86" text-anchor="middle">Red</text>
+        <text class="sub" x="255" y="104" text-anchor="middle">HTTP + JSON</text>
+        <text class="sub" x="255" y="122" text-anchor="middle">módulo 01</text>
+
+        <!-- Zona del backend -->
+        <rect class="zona" x="315" y="20" width="455" height="280" rx="14"/>
+        <text class="etiqueta-zona" x="332" y="46">Backend · FastAPI (Python) · módulos 02, 03 y 06</text>
+
+        <!-- Conexiones -->
+        <line class="linea" x1="195" y1="155" x2="332" y2="155"/>
+        <line class="linea" x1="462" y1="155" x2="477" y2="155"/>
+        <line class="linea" x1="607" y1="155" x2="622" y2="155"/>
+        <line class="linea" x1="754" y1="155" x2="800" y2="155"/>
+        <line class="pista" x1="30" y1="255" x2="940" y2="255"/>
+
+        <!-- Nodos -->
+        <g class="nodo" id="n-navegador">
+          <rect x="20" y="100" width="175" height="110" rx="12"/>
+          <text class="titulo-nodo" x="107" y="140" text-anchor="middle">Navegador</text>
+          <text class="sub" x="107" y="162" text-anchor="middle">React + Vite</text>
+          <text class="sub" x="107" y="182" text-anchor="middle">módulos 07 a 09</text>
+        </g>
+        <g class="nodo" id="n-router">
+          <rect x="332" y="100" width="130" height="110" rx="12"/>
+          <text class="titulo-nodo" x="397" y="140" text-anchor="middle">Router</text>
+          <text class="sub" x="397" y="162" text-anchor="middle">+ Pydantic</text>
+          <text class="sub" x="397" y="182" text-anchor="middle">valida la forma</text>
+        </g>
+        <g class="nodo" id="n-service">
+          <rect x="477" y="100" width="130" height="110" rx="12"/>
+          <text class="titulo-nodo" x="542" y="140" text-anchor="middle">Service</text>
+          <text class="sub" x="542" y="162" text-anchor="middle">reglas del</text>
+          <text class="sub" x="542" y="182" text-anchor="middle">negocio</text>
+        </g>
+        <g class="nodo" id="n-orm">
+          <rect x="622" y="100" width="132" height="110" rx="12"/>
+          <text class="titulo-nodo" x="688" y="140" text-anchor="middle">SQLAlchemy</text>
+          <text class="sub" x="688" y="162" text-anchor="middle">acceso a datos</text>
+          <text class="sub" x="688" y="182" text-anchor="middle">módulo 05</text>
+        </g>
+        <g class="nodo" id="n-db">
+          <rect x="800" y="100" width="145" height="110" rx="12"/>
+          <text class="titulo-nodo" x="872" y="140" text-anchor="middle">MariaDB</text>
+          <text class="sub" x="872" y="162" text-anchor="middle">base de datos</text>
+          <text class="sub" x="872" y="182" text-anchor="middle">módulo 04</text>
+        </g>
+
+        <!-- Paquete que viaja: lo mueve el script -->
+        <g class="paquete" id="paquete">
+          <rect id="paquete-fondo" x="-40" y="-15" width="80" height="30" rx="15"/>
+          <text id="paquete-texto" x="0" y="5" text-anchor="middle"></text>
+        </g>
+      </svg>
+    </div>
+
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle">
+      <p class="detalle-titulo" id="detalle-titulo"></p>
+      <pre><code id="detalle-codigo"></code></pre>
+    </div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Validar el stock solo en React.</strong></p>
+    <p>Quien conozca la ruta puede enviar la petición con <code>curl</code> o desde las herramientas del navegador y saltear la pantalla. La validación del frontend mejora la experiencia, pero la que protege los datos es la del backend.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Pensar que el frontend y el backend son el mismo programa.</strong></p>
+    <p>Son dos procesos distintos, que pueden ejecutarse en máquinas distintas. Por eso se comunican por HTTP y no llamándose funciones entre sí.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Confundir «el servidor» máquina con «el servidor» programa.</strong></p>
+    <p>La máquina de la facultad es un servidor físico o virtual. FastAPI es un programa servidor que corre en esa máquina, igual que MariaDB. En una misma máquina pueden correr varios programas servidores, cada uno en su puerto.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Poner reglas del negocio en el router.</strong></p>
+    <p>Si la regla de stock vive en la función del router, no se puede reutilizar desde otro lugar (por ejemplo, desde un futuro bot) sin copiarla. El router traduce HTTP; el service decide.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> La dueña quiere ver las ventas de hoy. Recorré el mapa: ¿qué tipo de pedido hace el frontend, qué capas atraviesa y hace falta una transacción que escriba datos?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El frontend hace un pedido de lectura (<code>GET /ventas?fecha=hoy</code>, se ve en el módulo 01). Pasa por el router, que valida los parámetros; por el service, que además debería verificar que quien pide sea la dueña (módulo 06); y por el acceso a datos, que ejecuta un <code>SELECT</code>. No se modifica ningún dato, así que no hace falta una transacción de escritura. La respuesta es un 200 con la lista de ventas en JSON.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> ¿En qué capa va la regla «un empleado no puede anular una venta»? ¿Por qué no alcanza con ocultar el botón Anular en la pantalla de los empleados?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Va en el backend, en el service o en una dependencia de permisos (módulo 06). Ocultar el botón es buena experiencia de uso, pero cualquiera puede enviar la petición HTTP directamente. El backend tiene que rechazarla con un código 403 (prohibido) aunque la pantalla nunca muestre el botón.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Si el sistema migra de MariaDB a PostgreSQL, ¿qué piezas del mapa cambian y cuáles no?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Cambia la base de datos y, en la capa de acceso a datos, la cadena de conexión y el controlador. Si se usaron funciones propias de MariaDB, también esas consultas. El router, el service y el frontend no cambian, porque sus contratos siguen siendo los mismos. Esa es la ganancia de separar en capas.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> En el escenario sin stock, ¿por qué el service consulta el stock en la base en lugar de usar el que muestra la pantalla de la cajera?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Porque el dato de la pantalla puede estar desactualizado: otra caja, o el otro local, pudo vender queso después de que la pantalla se cargó. Además, el frontend no es confiable. La única fuente de verdad en ese instante es la base de datos.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/Overview">MDN Web Docs: generalidades del protocolo HTTP</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/">FastAPI: documentación oficial en español</a></li>
+    <li><a href="https://es.react.dev/learn">React: documentación oficial en español</a></li>
+    <li><a href="https://docs.sqlalchemy.org/en/20/tutorial/">SQLAlchemy 2.0: tutorial unificado (en inglés)</a></li>
+    <li><a href="https://mariadb.com/docs/">MariaDB: documentación oficial (en inglés)</a></li>
+  </ul>
+
+  <p style="margin-top:3em"><a href="01_http_rest.html">Siguiente: Módulo 01, HTTP y REST →</a></p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // Posición horizontal del paquete sobre cada pieza del diagrama (unidades del viewBox).
+  const POSICIONES = { navegador: 107, red: 255, router: 397, service: 542, orm: 688, db: 872 };
+  const ALTURA_PISTA = 255;
+  const NODOS = ["navegador", "router", "service", "orm", "db"];
+
+  const PETICION_OK = `POST /ventas HTTP/1.1
+Host: 127.0.0.1:8000
+Content-Type: application/json
+Content-Length: 36
+
+{"producto_id":1,"cantidad":"0.350"}`;
+
+  // ---------- Escenario 1: venta normal ----------
+  const pasosOk = [
+    {
+      titulo: "La cajera toca «Cobrar»",
+      texto: "<p>La cajera pesa 0,350 kg de queso cremoso (precio de ejemplo: $12.500 por kg) y toca <strong>Cobrar</strong>. Todo esto ocurre en el <strong>navegador</strong>: React muestra la pantalla y guarda en memoria lo que se escribió.</p><p>Todavía no se guardó nada. El navegador no tiene acceso a la base de datos; solo puede pedirle cosas al backend.</p>",
+      nodos: { navegador: "activo" },
+      paquete: { en: "navegador", etiqueta: "clic en Cobrar" },
+      detalle: {
+        titulo: "Lo que React tiene en memoria (estado del componente)",
+        codigo: `{ producto_id: 1, cantidad: "0.350" }
+// En pantalla se ve «0,350» con coma; en el código se usa punto decimal.`,
+      },
+    },
+    {
+      titulo: "React arma el pedido",
+      texto: "<p>React convierte esos datos a JSON (<em>JavaScript Object Notation</em> o Notación de Objetos de JavaScript), un formato de texto que entienden tanto JavaScript como Python. Después llama a <code>fetch</code>, la función del navegador que envía peticiones HTTP.</p>",
+      nodos: { navegador: "activo" },
+      paquete: { en: "navegador", etiqueta: "JSON" },
+      detalle: {
+        titulo: "Frontend · pantalla de ventas (simplificado)",
+        codigo: `const respuesta = await fetch("/ventas", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ producto_id: 1, cantidad: "0.350" }),
+});`,
+      },
+    },
+    {
+      titulo: "El pedido viaja por la red",
+      texto: "<p>El navegador envía una petición HTTP (<em>HyperText Transfer Protocol</em> o Protocolo de Transferencia de Hipertexto) al servidor. Es texto con un formato fijo: método y ruta, encabezados (<em>headers</em>), una línea en blanco y el cuerpo. El módulo 01 la desarma línea por línea.</p>",
+      nodos: {},
+      paquete: { en: "red", etiqueta: "POST /ventas" },
+      detalle: { titulo: "La petición tal como viaja (simplificada)", codigo: PETICION_OK },
+    },
+    {
+      titulo: "FastAPI recibe y Pydantic valida la forma",
+      texto: "<p>FastAPI lee la ruta (<code>POST /ventas</code>) y busca la función del <strong>router</strong> que la atiende. Antes de ejecutarla, Pydantic comprueba que el JSON tenga la forma esperada: <code>producto_id</code> tiene que ser un entero y <code>cantidad</code> un número mayor que cero.</p><p>Esta validación revisa la <em>forma</em> de los datos, no las reglas del negocio. Pydantic no sabe cuánto queso hay.</p>",
+      nodos: { router: "activo" },
+      paquete: { en: "router", etiqueta: "VentaIn ✓" },
+      detalle: {
+        titulo: "Backend · router y schema (simplificado)",
+        codigo: `class VentaIn(BaseModel):
+    producto_id: int
+    cantidad: Decimal = Field(gt=0)
+
+@router.post("/ventas", status_code=201)
+def crear_venta(venta: VentaIn, servicio: VentaService = Depends()):
+    return servicio.registrar(venta)`,
+      },
+    },
+    {
+      titulo: "El service consulta el stock",
+      texto: "<p>El router no decide nada: le pasa los datos al <strong>service</strong>, que es donde viven las reglas del negocio. Para saber si alcanza el queso, el service le pide el stock a la capa de acceso a datos, y SQLAlchemy lo traduce a SQL.</p>",
+      nodos: { service: "activo", orm: "activo", db: "activo" },
+      paquete: { en: "db", etiqueta: "SELECT stock" },
+      detalle: {
+        titulo: "SQL que genera SQLAlchemy",
+        codigo: `SELECT stock FROM producto WHERE id = 1 FOR UPDATE;
+-- FOR UPDATE bloquea la fila hasta terminar la venta,
+-- para que otra caja no venda el mismo queso a la vez (módulo 05).`,
+      },
+    },
+    {
+      titulo: "Hay stock: el service aprueba",
+      texto: "<p>MariaDB responde que hay 2,100 kg. Como 2,100 kg ≥ 0,350 kg, el service aprueba la venta y calcula el total: 0,350 kg × $12.500/kg = $4.375.</p>",
+      nodos: { service: "ok" },
+      paquete: { en: "service", etiqueta: "2,100 kg ≥ 0,350 kg", tipo: "ok" },
+      detalle: {
+        titulo: "Backend · service (simplificado)",
+        codigo: `def registrar(self, venta: VentaIn):
+    producto = self.repositorio.obtener_para_actualizar(venta.producto_id)
+    if producto.stock < venta.cantidad:
+        raise StockInsuficiente(disponible=producto.stock)
+    total = venta.cantidad * producto.precio
+    return self.repositorio.guardar_venta(producto, venta.cantidad, total)`,
+      },
+    },
+    {
+      titulo: "Se guarda todo en una transacción",
+      texto: "<p>SQLAlchemy envía dos operaciones: registrar la venta y descontar el stock. Van dentro de una <strong>transacción</strong>, así que se aplican las dos o ninguna. Si se cortara la luz entre una y otra, MariaDB deshace la primera y el stock nunca queda desfasado de las ventas.</p>",
+      nodos: { orm: "activo", db: "ok" },
+      paquete: { en: "db", etiqueta: "INSERT + UPDATE", tipo: "ok" },
+      detalle: {
+        titulo: "SQL que genera SQLAlchemy",
+        codigo: `INSERT INTO venta (producto_id, cantidad, total) VALUES (1, 0.350, 4375.00);
+UPDATE producto SET stock = stock - 0.350 WHERE id = 1;
+COMMIT;  -- recién acá los cambios quedan guardados`,
+      },
+    },
+    {
+      titulo: "La respuesta sube por las capas",
+      texto: "<p>MariaDB confirma y devuelve el número de la venta. La respuesta hace el camino inverso: acceso a datos → service → router. El router la convierte a JSON con la forma acordada en el schema de salida.</p>",
+      nodos: { router: "activo" },
+      paquete: { en: "router", etiqueta: "venta 1532", tipo: "ok" },
+      detalle: {
+        titulo: "Backend · schema de salida (simplificado)",
+        codigo: `class VentaOut(BaseModel):
+    id: int
+    total: Decimal
+    stock_restante: Decimal`,
+      },
+    },
+    {
+      titulo: "FastAPI responde 201 Created",
+      texto: "<p>El servidor devuelve una respuesta HTTP con el código 201, que significa «se creó un recurso nuevo». Con ese número de tres cifras, el frontend sabe qué pasó sin interpretar el texto.</p>",
+      nodos: {},
+      paquete: { en: "red", etiqueta: "HTTP 201", tipo: "ok" },
+      detalle: {
+        titulo: "La respuesta tal como viaja (simplificada)",
+        codigo: `HTTP/1.1 201 Created
+Content-Type: application/json
+
+{"id": 1532, "total": "4375.00", "stock_restante": "1.750"}`,
+      },
+    },
+    {
+      titulo: "React actualiza la pantalla",
+      texto: "<p><code>fetch</code> recibe la respuesta, React lee el JSON y actualiza la pantalla: «Venta 1532 registrada. Total: $4.375. Quedan 1,750 kg». En una red normal, el viaje completo dura una fracción de segundo.</p>",
+      nodos: { navegador: "ok" },
+      paquete: { en: "navegador", etiqueta: "pantalla actualizada", tipo: "ok" },
+      detalle: {
+        titulo: "Frontend · manejo de la respuesta (simplificado)",
+        codigo: `if (respuesta.status === 201) {
+  const venta = await respuesta.json();
+  mostrarMensaje(\`Venta \${venta.id} registrada. Total: $\${venta.total}\`);
+}`,
+      },
+    },
+  ];
+
+  // ---------- Escenario 2: sin stock suficiente ----------
+  const pasosSinStock = [
+    {
+      titulo: "La cajera pide 3 kg",
+      texto: "<p>Ahora la cajera carga 3,000 kg del mismo queso, pero hay 2,100 kg. La pantalla podría avisarlo, pero no es obligatorio: quien hace cumplir la regla es el backend.</p>",
+      nodos: { navegador: "activo" },
+      paquete: { en: "navegador", etiqueta: "clic en Cobrar" },
+      detalle: { titulo: "Lo que React tiene en memoria", codigo: `{ producto_id: 1, cantidad: "3.000" }` },
+    },
+    {
+      titulo: "El pedido viaja por la red",
+      texto: "<p>La petición es idéntica a la de una venta normal. Solo cambia el valor de <code>cantidad</code>.</p>",
+      nodos: {},
+      paquete: { en: "red", etiqueta: "POST /ventas" },
+      detalle: { titulo: "La petición tal como viaja (simplificada)", codigo: PETICION_OK.replace("0.350", "3.000") },
+    },
+    {
+      titulo: "Pydantic acepta la forma",
+      texto: "<p>La forma es correcta: 3 es un número mayor que cero. Pydantic no sabe cuánto stock hay, y no debe saberlo, porque su trabajo es la forma de los datos.</p>",
+      nodos: { router: "ok" },
+      paquete: { en: "router", etiqueta: "VentaIn ✓", tipo: "ok" },
+      detalle: { titulo: "Backend · schema", codigo: `cantidad: Decimal = Field(gt=0)   # 3.000 > 0 → válido` },
+    },
+    {
+      titulo: "El service consulta el stock",
+      texto: "<p>Igual que antes, el service pide el stock actual a la base de datos.</p>",
+      nodos: { service: "activo", orm: "activo", db: "activo" },
+      paquete: { en: "db", etiqueta: "SELECT stock" },
+      detalle: { titulo: "SQL que genera SQLAlchemy", codigo: `SELECT stock FROM producto WHERE id = 1 FOR UPDATE;` },
+    },
+    {
+      titulo: "No alcanza: el service rechaza",
+      texto: "<p>El service compara 2,100 kg con 3,000 kg y lanza un error de negocio. No se ejecuta ningún <code>INSERT</code> ni <code>UPDATE</code>, así que la base queda exactamente como estaba.</p>",
+      nodos: { service: "error" },
+      paquete: { en: "service", etiqueta: "2,100 kg < 3,000 kg", tipo: "error" },
+      detalle: {
+        titulo: "Backend · service (simplificado)",
+        codigo: `if producto.stock < venta.cantidad:          # 2.100 < 3.000
+    raise StockInsuficiente(disponible=producto.stock)`,
+      },
+    },
+    {
+      titulo: "FastAPI responde 409 Conflict",
+      texto: "<p>FastAPI traduce el error a una respuesta HTTP 409 (<em>Conflict</em> o Conflicto). Significa que el pedido tiene buena forma, pero choca con el estado actual de los datos. El cuerpo explica el motivo.</p>",
+      nodos: {},
+      paquete: { en: "red", etiqueta: "HTTP 409", tipo: "error" },
+      detalle: {
+        titulo: "La respuesta tal como viaja (simplificada)",
+        codigo: `HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{"detail": "Stock insuficiente: hay 2.100 kg"}`,
+      },
+    },
+    {
+      titulo: "React muestra el aviso",
+      texto: "<p>React ve el código 409 y muestra el mensaje. La cajera puede corregir la cantidad y volver a intentar.</p>",
+      nodos: { navegador: "error" },
+      paquete: { en: "navegador", etiqueta: "aviso en pantalla", tipo: "error" },
+      detalle: {
+        titulo: "Frontend · manejo del error (simplificado)",
+        codigo: `if (respuesta.status === 409) {
+  const error = await respuesta.json();
+  mostrarError(error.detail);
+}`,
+      },
+    },
+  ];
+
+  // ---------- Escenario 3: datos inválidos ----------
+  const pasosInvalido = [
+    {
+      titulo: "Llega una cantidad negativa",
+      texto: "<p>Un error de tipeo, o un error en el código del frontend, manda una cantidad de −1 kg. También podría ser alguien que llama a la API directamente, sin pasar por la pantalla.</p>",
+      nodos: { navegador: "activo" },
+      paquete: { en: "navegador", etiqueta: "clic en Cobrar" },
+      detalle: { titulo: "Lo que React tiene en memoria", codigo: `{ producto_id: 1, cantidad: "-1" }` },
+    },
+    {
+      titulo: "El pedido viaja por la red",
+      texto: "<p>Para HTTP no hay nada raro: es una petición bien formada, con un JSON válido adentro.</p>",
+      nodos: {},
+      paquete: { en: "red", etiqueta: "POST /ventas" },
+      detalle: {
+        titulo: "La petición tal como viaja (simplificada)",
+        codigo: `POST /ventas HTTP/1.1
+Host: 127.0.0.1:8000
+Content-Type: application/json
+Content-Length: 33
+
+{"producto_id":1,"cantidad":"-1"}`,
+      },
+    },
+    {
+      titulo: "Pydantic rechaza la forma",
+      texto: "<p>Pydantic detecta que la cantidad no es mayor que cero y corta el pedido ahí mismo. La función del router <strong>no llega a ejecutarse</strong>, así que el service y la base de datos nunca se enteran.</p>",
+      nodos: { router: "error" },
+      paquete: { en: "router", etiqueta: "cantidad > 0 ✗", tipo: "error" },
+      detalle: { titulo: "Backend · schema", codigo: `cantidad: Decimal = Field(gt=0)   # -1 > 0 es falso → error 422` },
+    },
+    {
+      titulo: "FastAPI responde 422",
+      texto: "<p>FastAPI arma automáticamente una respuesta 422 (<em>Unprocessable Entity</em> o Entidad No Procesable) que indica qué campo falló y por qué. Esa respuesta no se programa: sale de declarar <code>Field(gt=0)</code> en el schema.</p>",
+      nodos: {},
+      paquete: { en: "red", etiqueta: "HTTP 422", tipo: "error" },
+      detalle: {
+        titulo: "La respuesta tal como viaja (simplificada)",
+        codigo: `HTTP/1.1 422 Unprocessable Entity
+Content-Type: application/json
+
+{"detail": [{"type": "greater_than", "loc": ["body", "cantidad"],
+             "msg": "Input should be greater than 0"}]}`,
+      },
+    },
+    {
+      titulo: "React muestra qué campo corregir",
+      texto: "<p>Con el detalle del error, React puede marcar en rojo el campo cantidad. La lección de este escenario es que el backend valida cada pedido, aunque la pantalla ya lo haya hecho.</p>",
+      nodos: { navegador: "error" },
+      paquete: { en: "navegador", etiqueta: "campo en rojo", tipo: "error" },
+      detalle: {
+        titulo: "Frontend · manejo del error (simplificado)",
+        codigo: `if (respuesta.status === 422) {
+  const error = await respuesta.json();
+  marcarCampoConError(error.detail[0].loc[1]);   // "cantidad"
+}`,
+      },
+    },
+  ];
+
+  // ---------- Dibujo de cada paso ----------
+  const paquete = document.getElementById("paquete");
+  const paqueteFondo = document.getElementById("paquete-fondo");
+  const paqueteTexto = document.getElementById("paquete-texto");
+  const detalleTitulo = document.getElementById("detalle-titulo");
+  const detalleCodigo = document.getElementById("detalle-codigo");
+
+  function dibujarPaso(paso) {
+    NODOS.forEach((nombre) => {
+      const nodo = document.getElementById(`n-${nombre}`);
+      nodo.classList.remove("activo", "ok", "error");
+      if (paso.nodos[nombre]) nodo.classList.add(paso.nodos[nombre]);
+    });
+
+    paqueteTexto.textContent = paso.paquete.etiqueta;
+    const ancho = paqueteTexto.getComputedTextLength() + 28;
+    paqueteFondo.setAttribute("width", ancho);
+    paqueteFondo.setAttribute("x", -ancho / 2);
+    paquete.classList.remove("ok", "error");
+    if (paso.paquete.tipo) paquete.classList.add(paso.paquete.tipo);
+    paquete.style.transform = `translate(${POSICIONES[paso.paquete.en]}px, ${ALTURA_PISTA}px)`;
+
+    detalleTitulo.textContent = paso.detalle.titulo;
+    detalleCodigo.textContent = paso.detalle.codigo;
+  }
+
+  const recorrido = crearRecorrido(document.getElementById("recorrido"), pasosOk, dibujarPaso);
+  conectarEscenarios(document.getElementById("escenarios"), {
+    ok: pasosOk,
+    sinStock: pasosSinStock,
+    invalido: pasosInvalido,
+  }, recorrido);
+</script>
+</body>
+</html>
