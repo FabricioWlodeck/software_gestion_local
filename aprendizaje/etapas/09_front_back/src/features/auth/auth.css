@@ -1,0 +1,17 @@
+.login {
+  max-width: 340px;
+  margin: 48px auto;
+  display: grid;
+  gap: 12px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 20px;
+}
+
+.login h2 { margin: 0; }
+.login label { display: grid; gap: 4px; }
+.login .error { color: var(--error); margin: 0; }
+
+.usuario-actual { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+.usuario-actual button { background: transparent; color: var(--acento); }

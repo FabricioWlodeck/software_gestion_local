@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Frontend y backend</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 09</span><span>100 min</span><span>Código: <code>aprendizaje/etapas/09_front_back</code></span></p>
+    <h1>Frontend ↔ backend: la pantalla habla con la API</h1>
+    <p>Cómo React pide y envía datos con <code>fetch</code>, por qué el navegador bloquea algunas peticiones (CORS), cómo se maneja el inicio de sesión y qué hace la pantalla con cada respuesta.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    La pantalla de la etapa 08 funciona con datos de prueba, y la API de la etapa 06 funciona desde <code>/docs</code>.
+    Falta unirlas, y al hacerlo aparecen problemas que no estaban en ninguna de las dos por separado. El navegador
+    tiene reglas de seguridad propias y bloquea peticiones que <code>curl</code> deja pasar. El token hay que
+    guardarlo en algún lado y enviarlo en cada petición. Y cada petición puede tardar, fallar por la red o volver con
+    un 401, un 409 o un 422, y la cajera tiene que ver algo razonable en cada caso.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 <code>fetch</code></h3>
+  <p>
+    <code>fetch</code> es la función del navegador para enviar peticiones HTTP. Devuelve una promesa, así que se usa
+    con <code>await</code>, y el resultado es un objeto <code>Response</code> con el código (<code>status</code>), un
+    indicador de éxito (<code>ok</code>, verdadero para los códigos 2xx) y métodos para leer el cuerpo, como
+    <code>json()</code>.
+  </p>
+  <p>
+    <code>fetch</code> <strong>no lanza un error por un 404 o un 409</strong>: para <code>fetch</code>, el servidor
+    respondió y la petición salió bien. Solo lanza un error si no hubo respuesta (sin red, servidor apagado o bloqueo
+    del navegador). Por eso hay que mirar <code>respuesta.ok</code> después de cada petición.
+  </p>
+
+  <h3>2.2 Un solo lugar para hablar con la API</h3>
+  <p>
+    Si cada pantalla llamara a <code>fetch</code> por su cuenta, cada una tendría que acordarse de la URL base, de
+    agregar el token, de interpretar los errores de FastAPI y de reaccionar a un 401. La etapa concentra todo eso en
+    <code>src/api/cliente.ts</code>. Su función <code>pedir</code> agrega el header <code>Authorization</code>, revisa
+    <code>respuesta.ok</code>, convierte el <code>detail</code> de FastAPI en un mensaje legible y lanza un
+    <code>ErrorApi</code> con el código. Las pantallas solo llaman a <code>api.listarProductos()</code> o
+    <code>api.registrarVenta(items)</code>. Es la misma idea que los repositorios del backend: una capa que esconde
+    los detalles de cómo se obtienen los datos.
+  </p>
+
+  <h3>2.3 Mismo origen y CORS</h3>
+  <p>
+    El <strong>origen</strong> de una página es la combinación de protocolo, servidor y puerto:
+    <code>http://localhost:5173</code> y <code>http://127.0.0.1:8000</code> son orígenes distintos. Por seguridad, el
+    navegador no deja que una página lea respuestas de otro origen. Si no existiera esa regla, cualquier sitio que se
+    abriera en el navegador de la dueña podría hacer peticiones a la API de Punto Lácteo con sus credenciales y leer
+    las ventas.
+  </p>
+  <p>
+    El servidor puede autorizar otros orígenes con CORS (<em>Cross-Origin Resource Sharing</em> o Intercambio de
+    Recursos de Origen Cruzado), respondiendo headers como <code>Access-Control-Allow-Origin</code>. Antes de una
+    petición con <code>Authorization</code> o con JSON, el navegador envía una <strong>petición de verificación
+    previa</strong> (<em>preflight</em>): un <code>OPTIONS</code> que pregunta si está permitido. La etapa 06 no
+    configura CORS, así que, desde la página de la caja, un <code>fetch</code> directo a <code>127.0.0.1:8000</code>
+    falla. Este es el mensaje real del navegador:
+  </p>
+  <pre class="envolver"><code>Access to fetch at 'http://127.0.0.1:8000/productos' from origin 'http://localhost:5173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.</code></pre>
+  <p>
+    CORS es una protección <em>del navegador</em>: <code>curl</code>, <code>cliente.py</code> y <code>/docs</code> no
+    la aplican, y por eso la misma API funcionaba en los módulos anteriores.
+  </p>
+
+  <h3>2.4 La solución: un proxy, mismo origen</h3>
+  <p>
+    Hay dos formas de resolverlo. Una es agregar <code>CORSMiddleware</code> en FastAPI con la lista de orígenes
+    permitidos. La otra, que usa la etapa, es que el navegador nunca hable con otro origen. En desarrollo, el servidor
+    de Vite funciona como <strong>proxy</strong>: el frontend pide <code>/api/productos</code> a
+    <code>localhost:5173</code>, y Vite reenvía la petición a <code>127.0.0.1:8000/productos</code>. Para el navegador
+    todo viene del mismo origen. En producción, nginx hace exactamente lo mismo (módulo 10), y por eso el código del
+    frontend no cambia entre desarrollo y producción.
+  </p>
+
+  <h3>2.5 La sesión en el frontend</h3>
+  <p>
+    El inicio de sesión sigue cuatro pasos. Primero, el formulario envía usuario y contraseña a
+    <code>POST /api/auth/token</code> como formulario (<code>URLSearchParams</code>), como exige OAuth2. Segundo, el
+    token recibido se guarda en <code>localStorage</code>, que conserva datos en el navegador aunque se cierre la
+    pestaña. Tercero, se pide <code>GET /api/auth/yo</code> para saber nombre y rol. Cuarto, desde ahí, cada petición
+    lleva el token en el header. Al abrir la página, si quedó un token guardado, se repite el tercer paso para
+    comprobar que siga siendo válido. Si cualquier petición responde 401, el cliente borra el token y la aplicación
+    vuelve al inicio de sesión.
+  </p>
+
+  <h3>2.6 Contexto: datos para todo el árbol</h3>
+  <p>
+    Casi todas las pantallas necesitan saber quién inició sesión. Pasar el usuario por props de padre a hijo a nieto
+    llenaría de props componentes que no lo usan. React ofrece el <strong>contexto</strong>:
+    <code>createContext</code> crea un canal, un <code>Provider</code> en lo alto del árbol pone un valor, y cualquier
+    componente de abajo lo lee con <code>useContext</code>. La etapa lo envuelve en un gancho propio,
+    <code>useSesion()</code>, que devuelve el usuario y las funciones para iniciar y cerrar sesión.
+  </p>
+
+  <h3>2.7 Los tres estados de una petición</h3>
+  <p>
+    Cada dato que viene del backend pasa por tres estados, y la pantalla tiene que contemplar los tres. Mientras
+    <strong>carga</strong>, se muestra «Cargando productos…». Si sale <strong>bien</strong>, se muestran los datos. Si
+    hay un <strong>error</strong>, se muestra el mensaje del backend. Al cobrar, un 409 o un 422 no vacían el carrito:
+    la cajera corrige la cantidad y vuelve a intentar. Después de una venta exitosa, la pantalla vuelve a pedir los
+    productos, porque el stock cambió.
+  </p>
+
+  <h3>2.8 La interfaz según el rol</h3>
+  <p>
+    <code>App</code> muestra el resumen de ventas solo si <code>usuario.rol === "duenio"</code>. Eso es experiencia de
+    uso, no seguridad: el código del frontend está en el navegador del empleado, y cualquiera puede modificarlo o
+    enviar la petición a mano. La protección real es el 403 del backend (módulo 06).
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>La función que hacen todas las peticiones, en <code>src/api/cliente.ts</code> (resumida):</p>
+  <pre><code>async function pedir&lt;T&gt;(ruta: string, opciones: RequestInit = {}): Promise&lt;T&gt; {
+  const headers = new Headers(opciones.headers);
+  const token = leerToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const respuesta = await fetch(`/api${ruta}`, { ...opciones, headers });
+  if (!respuesta.ok) {                        // fetch no lanza error por un 4xx: hay que mirarlo
+    const cuerpo = await respuesta.json().catch(() =&gt; null);
+    if (respuesta.status === 401 &amp;&amp; token) { borrarToken(); alPerderSesion(); }
+    throw new ErrorApi(respuesta.status, mensajeDeError(cuerpo, respuesta.status));
+  }
+  return (await respuesta.json()) as T;
+}</code></pre>
+
+  <p>El proxy de desarrollo en <code>vite.config.ts</code>:</p>
+  <pre><code>server: {
+  proxy: {
+    '/api': {
+      target: 'http://127.0.0.1:8000',
+      rewrite: (ruta) =&gt; ruta.replace(/^\/api/, ''),   // /api/productos → /productos
+    },
+  },
+},</code></pre>
+
+  <p>Una pantalla que usa la API y la sesión:</p>
+  <pre><code>const { usuario } = useSesion();
+
+async function cobrar() {
+  try {
+    const venta = await api.registrarVenta(items);
+    setMensaje(`Venta ${venta.id} registrada. Total: ${formatearPrecio(venta.total)}`);
+  } catch (problema) {
+    setError(problema instanceof ErrorApi ? problema.message : "No se pudo conectar con el servidor");
+  }
+}</code></pre>
+
+  <p>Se ejecuta con el backend de la etapa 06 y el frontend en dos terminales:</p>
+  <pre><code>fastapi dev app/main.py   # en etapas/06_seguridad, puerto 8000
+npm run dev               # en etapas/09_front_back, puerto 5173</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Llamada del frontend</th><th>Ruta del backend</th><th>Guardia</th><th>Definida en</th></tr></thead>
+      <tbody>
+        <tr><td><code>api.iniciarSesion()</code></td><td><code>POST /auth/token</code></td><td>Abierta</td><td>Módulo 06</td></tr>
+        <tr><td><code>api.quienSoy()</code></td><td><code>GET /auth/yo</code></td><td>Usuario identificado (401)</td><td>Módulo 06</td></tr>
+        <tr><td><code>api.listarProductos()</code></td><td><code>GET /productos</code></td><td>Usuario identificado (401)</td><td>Módulos 03 y 06</td></tr>
+        <tr><td><code>api.registrarVenta()</code></td><td><code>POST /ventas</code></td><td>Usuario identificado (401)</td><td>Módulos 03, 05 y 06</td></tr>
+        <tr><td><code>api.listarVentas()</code></td><td><code>GET /ventas</code></td><td>Rol dueño (403)</td><td>Módulo 06</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Cada llamada del frontend, la ruta que usa y quién puede usarla.</figcaption>
+  </div>
+  <p>
+    En el módulo 10, <code>npm run build</code> convierte este frontend en archivos estáticos que sirve nginx. nginx
+    también reenvía <code>/api</code> al contenedor del backend, así que <code>cliente.ts</code> sigue usando
+    <code>/api</code> sin ningún cambio.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: de la pantalla a la base y de vuelta</h2>
+  <p>Las respuestas son las que dio el sistema al probarlo con los usuarios de prueba.</p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="login" aria-pressed="true">Inicio de sesión</button>
+      <button type="button" class="escenario" data-escenario="venta" aria-pressed="false">Cobrar (201)</button>
+      <button type="button" class="escenario" data-escenario="sinStock" aria-pressed="false">Sin stock (409)</button>
+      <button type="button" class="escenario" data-escenario="cors" aria-pressed="false">Sin proxy (CORS)</button>
+      <button type="button" class="escenario" data-escenario="vencido" aria-pressed="false">Token inválido (401)</button>
+    </div>
+    <div class="escena">
+      <svg class="diagrama" id="diagrama" viewBox="0 0 960 300" role="img" aria-label="Recorrido de una petición desde la pantalla hasta la base de datos">
+        <rect class="zona" x="10" y="25" width="400" height="260" rx="14"/>
+        <text class="etiqueta-zona" x="26" y="48">Navegador (localhost:5173)</text>
+        <line class="linea" x1="190" y1="150" x2="220" y2="150"/>
+        <line class="linea" x1="390" y1="150" x2="440" y2="150"/>
+        <line class="linea" x1="600" y1="150" x2="630" y2="150"/>
+        <line class="linea" x1="790" y1="150" x2="820" y2="150"/>
+        <line class="pista" x1="20" y1="250" x2="940" y2="250"/>
+        <g class="nodo" id="n-pantalla"><rect x="30" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="110" y="135" text-anchor="middle">Pantalla</text>
+          <text class="sub" x="110" y="157" text-anchor="middle">componentes</text>
+          <text class="sub" x="110" y="177" text-anchor="middle">useSesion()</text></g>
+        <g class="nodo" id="n-cliente"><rect x="220" y="95" width="170" height="110" rx="12"/>
+          <text class="titulo-nodo" x="305" y="135" text-anchor="middle">api/cliente.ts</text>
+          <text class="sub" x="305" y="157" text-anchor="middle">fetch + token</text>
+          <text class="sub" x="305" y="177" text-anchor="middle">localStorage</text></g>
+        <g class="nodo" id="n-proxy"><rect x="440" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="520" y="135" text-anchor="middle">Proxy de Vite</text>
+          <text class="sub" x="520" y="157" text-anchor="middle">/api → :8000</text>
+          <text class="sub" x="520" y="177" text-anchor="middle">(nginx en el 10)</text></g>
+        <g class="nodo" id="n-api"><rect x="630" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="710" y="135" text-anchor="middle">FastAPI</text>
+          <text class="sub" x="710" y="157" text-anchor="middle">etapa 06</text>
+          <text class="sub" x="710" y="177" text-anchor="middle">127.0.0.1:8000</text></g>
+        <g class="nodo" id="n-db"><rect x="820" y="95" width="125" height="110" rx="12"/>
+          <text class="titulo-nodo" x="882" y="135" text-anchor="middle">MariaDB</text>
+          <text class="sub" x="882" y="157" text-anchor="middle">:3307</text></g>
+        <g class="paquete"><rect x="-40" y="-15" width="80" height="30" rx="15"/><text x="0" y="5" text-anchor="middle"></text></g>
+      </svg>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle"><p class="detalle-titulo"></p><pre class="envolver"><code></code></pre></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Suponer que <code>fetch</code> lanza un error con un 404 o un 409.</strong></p>
+    <p>No lo hace: la promesa se resuelve con la respuesta, y si no se mira <code>respuesta.ok</code>, el código intenta usar el cuerpo de un error como si fueran datos. <code>cliente.ts</code> lo revisa en un solo lugar.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Pensar que la API está rota porque falla en el navegador y funciona con <code>curl</code>.</strong></p>
+    <p>Es CORS: la API responde, pero el navegador no deja que la página lea la respuesta. La consola del navegador lo dice explícitamente. Se resuelve con el proxy o con <code>CORSMiddleware</code>, nunca desactivando la seguridad del navegador.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escribir <code>http://127.0.0.1:8000</code> dentro de los componentes.</strong></p>
+    <p>Esa dirección no existe en el navegador de la cajera cuando el sistema está en el servidor. Con rutas relativas (<code>/api/...</code>) y un proxy, el mismo código funciona en desarrollo y en producción.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Olvidar <code>Content-Type: application/json</code> al enviar JSON.</strong></p>
+    <p>Sin ese header, FastAPI no interpreta el cuerpo como JSON y responde 422. <code>api.registrarVenta</code> lo agrega.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escribir <code>useEffect(async () =&gt; {...})</code>.</strong></p>
+    <p>Una función <code>async</code> devuelve una promesa, y <code>useEffect</code> espera que el efecto devuelva nada o una función de limpieza. Se escribe una función común que adentro llama a la asíncrona, o se usa <code>.then()</code>, como en la etapa.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Vaciar el formulario cuando el backend rechaza.</strong></p>
+    <p>Si un 409 vacía el carrito, la cajera tiene que cargar todo de nuevo para corregir una cantidad. Ante un error, el estado queda como estaba y se muestra el mensaje.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Comentá el bloque <code>proxy</code> de <code>vite.config.ts</code> y cambiá <code>BASE</code> en <code>cliente.ts</code> por <code>"http://127.0.0.1:8000"</code>. ¿Qué muestra la consola del navegador? ¿Qué habría que agregar en el backend para que funcione así?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El error de CORS de la sección 2.3. En la etapa 06 habría que agregar el middleware en <code>main.py</code> (y después volver todo a como estaba):</p>
+      <pre><code>from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)</code></pre>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Deshabilitá el botón Cobrar mientras se envía la venta, para que un doble clic no registre dos ventas. ¿Qué estado nuevo hace falta y dónde vive?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Un <code>const [enviando, setEnviando] = useState(false)</code> en <code>PantallaVentas</code>, que se pone en <code>true</code> al empezar <code>cobrar</code> y en <code>false</code> en un <code>finally</code>. Se pasa a <code>Carrito</code> como prop, y el botón usa <code>disabled={enviando}</code>. Recordá el módulo 01: <code>POST</code> no es idempotente.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Cuando el token vence, la aplicación vuelve al inicio de sesión sin explicar por qué. Hacé que muestre «Tu sesión venció, volvé a ingresar».</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>En <code>SesionProvider</code>, el callback de <code>cuandoSePierdaLaSesion</code> puede guardar un mensaje en un estado nuevo (por ejemplo, <code>aviso</code>) además de borrar el usuario. Ese aviso se agrega al contexto, y <code>PantallaLogin</code> lo muestra arriba del formulario.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> ¿Por qué <code>api.iniciarSesion</code> envía <code>URLSearchParams</code> y <code>api.registrarVenta</code> envía <code>JSON.stringify</code>? ¿Qué pasaría si se intercambiaran?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Porque cada ruta espera un formato distinto: <code>/auth/token</code> sigue OAuth2, que exige un formulario, y <code>/ventas</code> recibe un schema de Pydantic en JSON. Intercambiados, las dos responderían 422: FastAPI no encontraría los campos donde los espera.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/API/Fetch_API/Using_Fetch">MDN Web Docs: usar fetch</a></li>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/HTTP/CORS">MDN Web Docs: CORS</a></li>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/API/Window/localStorage">MDN Web Docs: localStorage</a></li>
+    <li><a href="https://es.react.dev/reference/react/useContext">React: useContext</a></li>
+    <li><a href="https://vite.dev/config/server-options">Vite: opciones del servidor, incluido server.proxy (en inglés)</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/cors/">FastAPI: CORS</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="08_react_vite.html">← Anterior: Módulo 08</a> ·
+    <a href="10_docker_compose.html">Siguiente: Módulo 10, Docker Compose →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  const POS = { pantalla: [110, 250], cliente: [305, 250], proxy: [520, 250], api: [710, 250], db: [882, 250] };
+
+  const ESCENARIOS = {
+    login: [
+      {
+        titulo: "Bruno envía el formulario",
+        texto: "<p><code>PantallaLogin</code> llama a <code>iniciarSesion</code> del contexto, que llama a <code>api.iniciarSesion(\"Bruno\", \"bruno123\")</code>. El cliente arma un formulario con <code>URLSearchParams</code>, como pide OAuth2.</p>",
+        nodos: { pantalla: "activo", cliente: "activo" }, paquete: { en: "cliente", etiqueta: "username=Bruno&password=…" },
+        detalle: { titulo: "Petición que arma el cliente", codigo: "POST /api/auth/token\nContent-Type: application/x-www-form-urlencoded\n\nusername=Bruno&password=bruno123" },
+      },
+      {
+        titulo: "El proxy reenvía",
+        texto: "<p>El navegador envía la petición a su propio origen, <code>localhost:5173</code>. Vite ve que empieza con <code>/api</code>, quita ese prefijo y la reenvía al backend. El navegador nunca se entera de que existe el puerto 8000.</p>",
+        nodos: { proxy: "activo" }, paquete: { en: "proxy", etiqueta: "/api/auth/token → :8000/auth/token" },
+        detalle: { titulo: "vite.config.ts", codigo: "'/api': {\n  target: 'http://127.0.0.1:8000',\n  rewrite: (ruta) => ruta.replace(/^\\/api/, ''),\n}" },
+      },
+      {
+        titulo: "El backend verifica y firma",
+        texto: "<p>La etapa 06 busca a Bruno, verifica la contraseña con Argon2 y devuelve un token JWT (módulo 06).</p>",
+        nodos: { api: "ok", db: "activo" }, paquete: { en: "api", etiqueta: "200 · token", tipo: "ok" },
+        detalle: { titulo: "Respuesta", codigo: '200 OK\n{"access_token":"eyJhbGciOiJIUzI1NiIs…","token_type":"bearer"}' },
+      },
+      {
+        titulo: "El token se guarda en el navegador",
+        texto: "<p>El cliente guarda el token en <code>localStorage</code> con la clave <code>punto-lacteo.token</code>. Queda ahí aunque se cierre la pestaña, hasta que se cierre la sesión o el backend lo rechace.</p>",
+        nodos: { cliente: "ok" }, paquete: { en: "cliente", etiqueta: "localStorage ← token", tipo: "ok" },
+        detalle: { titulo: "src/api/cliente.ts", codigo: "localStorage.setItem(\"punto-lacteo.token\", token.access_token);" },
+      },
+      {
+        titulo: "¿Quién soy?",
+        texto: "<p>Con el token guardado, el contexto pide <code>GET /api/auth/yo</code>. Esta vez el cliente agrega el header <code>Authorization: Bearer</code>. El backend responde nombre y rol.</p>",
+        nodos: { cliente: "activo", api: "ok" }, paquete: { en: "api", etiqueta: "GET /auth/yo + Bearer", tipo: "ok" },
+        detalle: { titulo: "Respuesta", codigo: '200 OK\n{"id":2,"nombre":"Bruno","rol":"empleado"}' },
+      },
+      {
+        titulo: "El contexto cambia: aparece la caja",
+        texto: "<p><code>setUsuario</code> cambia el estado del <code>SesionProvider</code>. Todos los componentes que usan <code>useSesion()</code> se vuelven a dibujar: <code>App</code> deja de mostrar el inicio de sesión y muestra la caja, sin el resumen de ventas, porque Bruno es empleado. La caja, a su vez, pide los productos.</p>",
+        nodos: { pantalla: "ok" }, paquete: { en: "pantalla", etiqueta: "usuario = Bruno", tipo: "ok" },
+        detalle: { titulo: "src/App.tsx", codigo: 'usuario === null ? <PantallaLogin /> : (\n  <>\n    <PantallaVentas />\n    {usuario.rol === "duenio" && <ResumenVentas />}\n  </>\n)' },
+      },
+    ],
+    venta: [
+      {
+        titulo: "Cobrar",
+        texto: "<p>El carrito tiene 0,200 kg de salame y 2 leches, con un total estimado en pantalla de $6.680. <code>cobrar()</code> convierte el carrito al formato de <code>VentaIn</code>: una lista de <code>producto_id</code> y <code>cantidad</code>. No se envía ni el precio ni el usuario: los decide el backend.</p>",
+        nodos: { pantalla: "activo", cliente: "activo" }, paquete: { en: "cliente", etiqueta: "POST /api/ventas" },
+        detalle: { titulo: "Petición", codigo: 'POST /api/ventas\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIs…\nContent-Type: application/json\n\n{"items":[{"producto_id":3,"cantidad":"0.200"},{"producto_id":2,"cantidad":"2"}]}' },
+      },
+      {
+        titulo: "Proxy, guardias y transacción",
+        texto: "<p>El proxy la reenvía. En el backend, la guardia identifica a Bruno por el token, el service bloquea los productos, valida, descuenta el stock y guarda la venta en una transacción (módulos 05 y 06).</p>",
+        nodos: { proxy: "activo", api: "activo", db: "ok" }, paquete: { en: "db", etiqueta: "BEGIN … COMMIT", tipo: "ok" },
+        detalle: { titulo: "En el backend", codigo: "SELECT ... FOR UPDATE   (salame y leche)\nUPDATE producto ...     (x2)\nINSERT INTO venta ...   (usuario_id = 2, el del token)\nINSERT INTO venta_detalle ...\nCOMMIT" },
+      },
+      {
+        titulo: "201: la pantalla usa el total del backend",
+        texto: "<p>La respuesta trae la venta guardada. La pantalla muestra el total que calculó el backend con <code>Decimal</code>, no la estimación propia. Vacía el carrito y vuelve a pedir los productos, porque el stock cambió.</p>",
+        nodos: { pantalla: "ok" }, paquete: { en: "pantalla", etiqueta: "201 · Venta 5 · $6.680", tipo: "ok" },
+        detalle: { titulo: "Lo que ve la cajera", codigo: "Venta 5 registrada. Total: $ 6.680,00\n\nStock actualizado: Salame milán 1,1 kg · Leche entera 1 L 16 u." },
+      },
+    ],
+    sinStock: [
+      {
+        titulo: "Cobrar más queso del que hay",
+        texto: "<p>El carrito pide 9 kg de queso, pero hay 0,250 kg. La pantalla no lo controla: la regla está en el backend.</p>",
+        nodos: { pantalla: "activo", cliente: "activo" }, paquete: { en: "cliente", etiqueta: "POST /api/ventas" },
+        detalle: { titulo: "Cuerpo", codigo: '{"items":[{"producto_id":1,"cantidad":"9"}]}' },
+      },
+      {
+        titulo: "El service rechaza",
+        texto: "<p>El service compara el stock bloqueado con lo pedido, lanza <code>StockInsuficiente</code> y la transacción se descarta. <code>main.py</code> responde 409.</p>",
+        nodos: { api: "error" }, paquete: { en: "api", etiqueta: "409 Conflict", tipo: "error" },
+        detalle: { titulo: "Respuesta", codigo: '409 Conflict\n{"detail":"Stock insuficiente de Queso cremoso: hay 0.250 y se pidieron 9.000"}' },
+      },
+      {
+        titulo: "El cliente convierte el 409 en un error",
+        texto: "<p><code>fetch</code> no lanzó nada: para él, el servidor respondió. Es <code>pedir</code> quien ve <code>respuesta.ok === false</code>, lee el <code>detail</code> y lanza un <code>ErrorApi</code> con el código 409 y ese mensaje.</p>",
+        nodos: { cliente: "error" }, paquete: { en: "cliente", etiqueta: "throw ErrorApi(409)", tipo: "error" },
+        detalle: { titulo: "src/api/cliente.ts", codigo: "if (!respuesta.ok) {\n  const cuerpo = await respuesta.json().catch(() => null);\n  throw new ErrorApi(respuesta.status, mensajeDeError(cuerpo, respuesta.status));\n}" },
+      },
+      {
+        titulo: "La pantalla muestra el motivo y conserva el carrito",
+        texto: "<p>El <code>catch</code> de <code>cobrar</code> guarda el mensaje en el estado <code>error</code>. El carrito no se toca: la cajera corrige la cantidad y vuelve a cobrar.</p>",
+        nodos: { pantalla: "error" }, paquete: { en: "pantalla", etiqueta: "mensaje en rojo", tipo: "error" },
+        detalle: { titulo: "Lo que ve la cajera", codigo: "Stock insuficiente de Queso cremoso: hay 0.250 y se pidieron 9.000\n\n(el carrito conserva su línea)" },
+      },
+    ],
+    cors: [
+      {
+        titulo: "Un fetch directo al puerto 8000",
+        texto: "<p>Supongamos que el cliente usara <code>http://127.0.0.1:8000</code> en lugar de <code>/api</code>. La página está en <code>localhost:5173</code>: son orígenes distintos.</p>",
+        nodos: { cliente: "activo" }, paquete: { en: "cliente", etiqueta: "fetch(\"http://127.0.0.1:8000/productos\")" },
+        detalle: { titulo: "Origen de la página y destino", codigo: "página:  http://localhost:5173\ndestino: http://127.0.0.1:8000\n→ distinto servidor y puerto: otro origen" },
+      },
+      {
+        titulo: "El navegador pregunta antes (preflight)",
+        texto: "<p>Como la petición lleva el header <code>Authorization</code>, el navegador primero envía un <code>OPTIONS</code> para preguntar si ese origen está permitido. La etapa 06 no tiene CORS configurado y responde 405.</p>",
+        nodos: { api: "error" }, paquete: { en: "api", etiqueta: "OPTIONS → 405", tipo: "error" },
+        detalle: { titulo: "Pestaña Red del navegador (real)", codigo: "OPTIONS http://127.0.0.1:8000/productos → 405 Method Not Allowed\nGET     http://127.0.0.1:8000/productos [FAILED: net::ERR_FAILED]" },
+      },
+      {
+        titulo: "El navegador bloquea",
+        texto: "<p>Sin permiso, el navegador ni siquiera envía el <code>GET</code>, y <code>fetch</code> lanza <code>TypeError: Failed to fetch</code>. La consola explica el motivo. Con el proxy, este problema no existe: el navegador solo habla con su propio origen.</p>",
+        nodos: { pantalla: "error", cliente: "error" }, paquete: { en: "cliente", etiqueta: "TypeError: Failed to fetch", tipo: "error" },
+        detalle: { titulo: "Consola del navegador (real)", codigo: "Access to fetch at 'http://127.0.0.1:8000/productos' from origin 'http://localhost:5173' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource." },
+      },
+    ],
+    vencido: [
+      {
+        titulo: "Se abre la página con un token guardado",
+        texto: "<p>Al cargar, <code>SesionProvider</code> encuentra un token en <code>localStorage</code> y pregunta a <code>/api/auth/yo</code> de quién es. En la prueba, el token tenía el contenido alterado; con un token vencido pasa lo mismo.</p>",
+        nodos: { pantalla: "activo", cliente: "activo" }, paquete: { en: "proxy", etiqueta: "GET /api/auth/yo + Bearer" },
+        detalle: { titulo: "Pantalla mientras tanto", codigo: "Verificando sesión…" },
+      },
+      {
+        titulo: "El backend responde 401",
+        texto: "<p>La guardia del backend no puede validar la firma (o el vencimiento) y responde 401.</p>",
+        nodos: { api: "error" }, paquete: { en: "api", etiqueta: "401 Unauthorized", tipo: "error" },
+        detalle: { titulo: "Respuesta", codigo: '401 Unauthorized\n{"detail":"Token inválido o vencido"}' },
+      },
+      {
+        titulo: "El cliente borra el token y avisa",
+        texto: "<p><code>pedir</code> ve un 401 con un token enviado: lo borra de <code>localStorage</code> y llama a la función registrada con <code>cuandoSePierdaLaSesion</code>, que pone el usuario en <code>null</code>.</p>",
+        nodos: { cliente: "error" }, paquete: { en: "cliente", etiqueta: "borrarToken()", tipo: "error" },
+        detalle: { titulo: "src/api/cliente.ts", codigo: "if (respuesta.status === 401 && token) {\n  borrarToken();\n  alPerderSesion();\n}" },
+      },
+      {
+        titulo: "Vuelve el inicio de sesión",
+        texto: "<p>Con el usuario en <code>null</code>, <code>App</code> muestra <code>PantallaLogin</code>. Ninguna pantalla tuvo que manejar el 401 por su cuenta.</p>",
+        nodos: { pantalla: "activo" }, paquete: { en: "pantalla", etiqueta: "PantallaLogin" },
+        detalle: { titulo: "Estado del navegador", codigo: "localStorage[\"punto-lacteo.token\"] = null\nusuario = null" },
+      },
+    ],
+  };
+
+  const raiz = document.getElementById("recorrido");
+  const dibujar = crearDiagrama(document.getElementById("diagrama"), POS);
+  const recorrido = crearRecorrido(raiz, ESCENARIOS.login, (paso) => {
+    dibujar(paso);
+    mostrarDetalle(raiz, paso.detalle);
+  });
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

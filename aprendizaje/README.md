@@ -27,7 +27,7 @@ Cada módulo está pensado para estudiarse en 1 a 1,5 h.
 | 06 | Seguridad | ¿Cómo se guardan las contraseñas y se identifica a quien hace cada petición? | [`etapas/06_seguridad`](etapas/06_seguridad/README.md) | Disponible |
 | 07 | JavaScript vs TypeScript | ¿Qué agrega TypeScript y cuánto cuesta usarlo? | [`etapas/07_js_vs_ts`](etapas/07_js_vs_ts/README.md) | Disponible |
 | 08 | React + Vite | ¿Cómo se crea, declara e inicializa una interfaz hecha con componentes? | [`etapas/08_react_vite`](etapas/08_react_vite/README.md) | Disponible |
-| 09 | Frontend ↔ backend | ¿Cómo consume React la API y cómo maneja el inicio de sesión? | `etapas/09_front_back` | Pendiente |
+| 09 | Frontend ↔ backend | ¿Cómo consume React la API y cómo maneja el inicio de sesión? | [`etapas/09_front_back`](etapas/09_front_back/README.md) | Disponible |
 | 10 | Docker Compose | ¿Cómo se empaqueta todo lo que antes se ejecutó a mano? | `etapas/10_docker_compose` | Pendiente |
 
 ## Estructura de carpetas
