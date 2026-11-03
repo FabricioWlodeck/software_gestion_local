@@ -23,7 +23,7 @@ Cada módulo está pensado para estudiarse en 1 a 1,5 h.
 | 02 | FastAPI desde cero | ¿Cómo se arranca un servidor y se define una ruta? | [`etapas/02_fastapi_basico`](etapas/02_fastapi_basico/README.md) | Disponible |
 | 03 | FastAPI estructurado | ¿Cómo se divide el backend y qué aporta cada división? | [`etapas/03_fastapi_estructurado`](etapas/03_fastapi_estructurado/README.md) | Disponible |
 | 04 | Diseño de la base de datos | ¿Cómo se pasa de una planilla a tablas normalizadas? | [`etapas/04_base_de_datos`](etapas/04_base_de_datos/README.md) | Disponible |
-| 05 | Backend ↔ base de datos | ¿Cómo lee y escribe el backend en MariaDB sin perder datos? | `etapas/05_backend_base` | Pendiente |
+| 05 | Backend ↔ base de datos | ¿Cómo lee y escribe el backend en MariaDB sin perder datos? | [`etapas/05_backend_base`](etapas/05_backend_base/README.md) | Disponible |
 | 06 | Seguridad | ¿Cómo se guardan las contraseñas y se identifica a quien hace cada petición? | `etapas/06_seguridad` | Pendiente |
 | 07 | JavaScript vs TypeScript | ¿Qué agrega TypeScript y cuánto cuesta usarlo? | `etapas/07_js_vs_ts` | Pendiente |
 | 08 | React + Vite | ¿Cómo se crea, declara e inicializa una interfaz hecha con componentes? | `etapas/08_react_vite` | Pendiente |

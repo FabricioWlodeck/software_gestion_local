@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backend y base de datos</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 05</span><span>100 min</span><span>Código: <code>aprendizaje/etapas/05_backend_base</code></span></p>
+    <h1>Backend ↔ base de datos: SQLAlchemy, transacciones y migraciones</h1>
+    <p>Cómo el backend lee y escribe en MariaDB, qué hace el ORM por debajo, cómo una transacción evita datos a medias y cómo se versiona el esquema con Alembic.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animaciones</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    La etapa 03 tiene las reglas del negocio bien separadas, pero los datos viven en memoria. La etapa 04 tiene una
+    base de datos bien diseñada, pero nadie la usa. Este módulo las une, y al hacerlo aparecen tres problemas que en
+    memoria no existían.
+  </p>
+  <p>
+    El primero es que una venta implica varias escrituras (la cabecera, las líneas y el stock de cada producto), y
+    si el servidor se cae en el medio no puede quedar la mitad guardada. El segundo es que dos cajas pueden vender el
+    mismo queso al mismo tiempo, y con una base compartida eso es real: en la etapa 05, si no se hace nada, se venden
+    3 kg de un queso del que había 2,1 kg. El tercero es que el esquema de la base va a cambiar durante el proyecto
+    (el módulo 06 agrega contraseñas), y esos cambios tienen que aplicarse igual en la PC de desarrollo y en el
+    servidor.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Controlador y ORM</h3>
+  <p>
+    Para hablar con MariaDB, Python necesita un <strong>controlador</strong> (<em>driver</em>): una librería que
+    conoce el protocolo de red del motor. La etapa usa PyMySQL. Con el controlador solo, el código escribe SQL como
+    texto y recibe tuplas.
+  </p>
+  <p>
+    Encima del controlador se usa un ORM (<em>Object-Relational Mapper</em> o Mapeador Objeto-Relacional):
+    SQLAlchemy. El ORM permite declarar cada tabla como una clase y cada fila como un objeto, y escribe el SQL por su
+    cuenta. Una venta deja de ser «un INSERT en venta y otro en venta_detalle» y pasa a ser un objeto
+    <code>Venta</code> con una lista de <code>detalles</code>. El SQL no desaparece: el ORM lo genera, y la etapa lo
+    muestra en la terminal para que se vea.
+  </p>
+
+  <h3>2.2 Engine y URL de conexión</h3>
+  <p>
+    El <code>engine</code> sabe a qué base conectarse y mantiene un <strong>pool</strong> de conexiones abiertas para
+    reutilizarlas, porque abrir una conexión nueva en cada petición es lento. Se configura con una URL de la forma
+    <code>dialecto+controlador://usuario:contraseña@servidor:puerto/base</code>:
+  </p>
+  <pre><code>mariadb+pymysql://pl:pl123@127.0.0.1:3307/punto_lacteo_orm?charset=utf8mb4</code></pre>
+  <p>
+    Cambiar de motor es cambiar ese texto: <code>sqlite:///./punto_lacteo.db</code> usa SQLite y
+    <code>postgresql+psycopg://...</code> usa PostgreSQL. Funciona porque el código usa tipos genéricos
+    (<code>Numeric</code>, <code>String</code>) y SQLAlchemy traduce cada consulta al dialecto de cada motor.
+  </p>
+
+  <h3>2.3 Modelos y schemas: dos clases para dos trabajos</h3>
+  <p>
+    Un <strong>modelo</strong> (<code>app/models.py</code>) describe una tabla: columnas, claves y relaciones. Un
+    <strong>schema</strong> (<code>app/schemas/</code>) describe lo que entra y sale por HTTP. Se parecen, pero no son
+    lo mismo: el modelo <code>Usuario</code> del módulo 06 tendrá el hash de la contraseña y el schema de salida no,
+    y <code>VentaIn</code> no tiene <code>id</code> porque lo asigna la base. Con
+    <code>model_config = ConfigDict(from_attributes=True)</code>, Pydantic arma un schema leyendo los atributos de un
+    objeto ORM: <code>VentaOut.model_validate(venta)</code>.
+  </p>
+  <p>
+    En el modelo, <code>Mapped[Decimal]</code> indica el tipo de Python y <code>mapped_column(Numeric(10, 3))</code>
+    el tipo de la columna. <code>relationship()</code> no crea columnas: permite navegar entre objetos, como
+    <code>venta.detalles</code> o <code>detalle.producto</code>.
+  </p>
+
+  <h3>2.4 La sesión</h3>
+  <p>
+    La <strong>sesión</strong> es la conversación con la base durante una petición. Cada petición recibe una sesión
+    nueva mediante la dependencia <code>obtener_sesion</code>. La sesión hace tres trabajos. Primero, abre una
+    transacción con la primera consulta (en el registro aparece <code>BEGIN (implicit)</code>). Segundo, recuerda los
+    objetos que cargó y detecta los cambios: <code>producto.stock -= cantidad</code> no envía nada, solo marca el
+    objeto como modificado. Tercero, envía todos los cambios pendientes juntos cuando se llama a
+    <code>flush()</code>, o a <code>commit()</code>, que hace un <code>flush()</code> y confirma.
+  </p>
+  <p>
+    <code>flush()</code> envía el SQL, pero sin confirmar: los cambios todavía se pueden deshacer. Se usa cuando hace
+    falta un dato que asigna la base, como el <code>id</code> de la venta nueva. <code>commit()</code> confirma, y
+    recién ahí los cambios quedan guardados y visibles para las demás conexiones.
+  </p>
+
+  <h3>2.5 Transacciones</h3>
+  <p>
+    Una <strong>transacción</strong> es un grupo de operaciones que la base trata como una sola. Garantiza cuatro
+    propiedades, conocidas como ACID (<em>Atomicity, Consistency, Isolation, Durability</em> o Atomicidad,
+    Consistencia, Aislamiento y Durabilidad). Con la atomicidad se aplican todas las operaciones o ninguna. Con la
+    consistencia, la base pasa de un estado válido a otro, respetando las restricciones. Con el aislamiento, las
+    transacciones simultáneas no ven los cambios a medio hacer de las otras. Con la durabilidad, lo confirmado
+    sobrevive a un corte de luz.
+  </p>
+  <p>
+    En <code>ServicioVentas.registrar</code>, todo lo que pasa entre el primer <code>SELECT</code> y el
+    <code>commit()</code> es una transacción. Si una regla falla, el service lanza un error, la sesión se cierra sin
+    confirmar y MariaDB hace <code>ROLLBACK</code>: descarta todo lo enviado. En el registro del servidor se ve cada
+    venta rechazada terminar así.
+  </p>
+
+  <h3>2.6 Concurrencia: dos cajas, un queso</h3>
+  <p>
+    Dos cajas pueden leer el mismo stock antes de que alguna lo modifique. Si las dos leen 2,1 kg, las dos aprueban
+    una venta de 1,5 kg y las dos guardan «2,1 − 1,5 = 0,6». El stock termina en 0,6 kg y se vendieron 3 kg. Este
+    error se llama <strong>actualización perdida</strong> (<em>lost update</em>), y ninguna restricción
+    <code>CHECK</code> lo detecta, porque 0,6 es un valor válido.
+  </p>
+  <p>
+    La solución es <code>SELECT ... FOR UPDATE</code>: al leer el producto, la transacción <strong>bloquea</strong> su
+    fila hasta el <code>commit</code>. La segunda caja que pide la misma fila espera, y cuando la primera confirma,
+    lee el stock ya actualizado. En SQLAlchemy se escribe <code>.with_for_update()</code>. El service bloquea los
+    productos en orden de <code>id</code>: si una venta bloqueara queso y después leche y otra leche y después queso,
+    cada una podría quedar esperando a la otra para siempre, situación conocida como <strong>interbloqueo</strong>
+    (<em>deadlock</em>). <code>demo_concurrencia.py</code> reproduce los dos casos.
+  </p>
+
+  <h3>2.7 ¿Quién hace el commit?</h3>
+  <p>
+    Un patrón común es confirmar en la dependencia, después del <code>yield</code>. En la versión de FastAPI que usa
+    la etapa, ese código se ejecuta <strong>después de enviar la respuesta</strong>. Si el <code>commit</code>
+    fallara ahí, el cliente ya habría recibido un 201 por una venta que no se guardó. Por eso, en la etapa, cada
+    service llama a <code>self.sesion.commit()</code> antes de devolver, y la dependencia solo cierra la sesión. El
+    service es además quien sabe cuándo una operación está completa.
+  </p>
+
+  <h3>2.8 Consultas con el ORM</h3>
+  <p>
+    <code>sesion.get(Producto, 1)</code> busca por clave primaria. <code>select(Producto).where(...)</code> arma una
+    consulta, y <code>sesion.scalars(consulta)</code> la ejecuta y devuelve objetos. Para listar ventas con sus líneas
+    se usa <code>selectinload</code>, que trae todas las líneas en una consulta extra. Sin eso, el ORM haría una
+    consulta por cada venta al leer <code>venta.detalles</code>, un problema conocido como «N+1 consultas».
+  </p>
+
+  <h3>2.9 Migraciones con Alembic</h3>
+  <p>
+    Una <strong>migración</strong> es un archivo que describe un cambio del esquema (crear una tabla, agregar una
+    columna) y cómo deshacerlo. Alembic guarda en la base, en la tabla <code>alembic_version</code>, cuál fue la
+    última migración aplicada, y <code>alembic upgrade head</code> aplica las que falten. Es el equivalente de git
+    para el esquema: la PC de desarrollo y el servidor llegan al mismo esquema ejecutando las mismas migraciones en
+    el mismo orden.
+  </p>
+  <p>
+    <code>alembic revision --autogenerate</code> compara los modelos con la base y escribe la migración. La primera
+    migración de la etapa (<code>0001_esquema_inicial.py</code>) se generó así y crea las mismas cuatro tablas que el
+    SQL escrito a mano en el módulo 04. La generación automática no es infalible (no detecta, por ejemplo, un cambio
+    de nombre de columna), y por eso cada migración se lee antes de aplicarla.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>Un modelo con sus columnas, restricciones y relaciones:</p>
+  <pre><code>class Venta(Base):
+    __tablename__ = "venta"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fecha: Mapped[datetime] = mapped_column(server_default=func.current_timestamp(), index=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuario.id"))
+    total: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+
+    detalles: Mapped[list["VentaDetalle"]] = relationship(back_populates="venta", cascade="all, delete-orphan")</code></pre>
+
+  <p>Una sesión por petición, entregada por una dependencia:</p>
+  <pre><code>engine = create_engine(DATABASE_URL, echo=MOSTRAR_SQL, pool_pre_ping=True)
+SesionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+def obtener_sesion() -&gt; Iterator[Session]:
+    with SesionLocal() as sesion:   # al salir, se cierra; lo no confirmado se descarta
+        yield sesion</code></pre>
+
+  <p>La lectura con bloqueo y el commit en el service:</p>
+  <pre><code>consulta = select(Producto).where(Producto.id == producto_id).with_for_update()
+producto = self.sesion.scalars(consulta).first()
+...
+self.sesion.commit()</code></pre>
+
+  <p>Preparación y ejecución, desde la carpeta de la etapa (el <code>README.md</code> tiene el paso a paso completo):</p>
+  <pre><code>alembic upgrade head          # crea las tablas con las migraciones
+python -m app.semilla         # carga usuarios y productos
+fastapi dev app/main.py       # la API, mostrando cada consulta SQL
+python demo_concurrencia.py   # la carrera entre dos cajas</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    La predicción de la Tabla 2 del módulo 03 se cumplió: para pasar de memoria a MariaDB cambiaron los repositorios
+    y las dependencias, y los routers quedaron idénticos (<strong>Tabla 1</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Archivo</th><th>Etapa 03</th><th>Etapa 05</th></tr></thead>
+      <tbody>
+        <tr><td><code>routers/</code></td><td>—</td><td>Sin cambios</td></tr>
+        <tr><td><code>repositories/</code></td><td>Diccionarios en memoria</td><td>Consultas SQLAlchemy sobre una sesión</td></tr>
+        <tr><td><code>services/</code></td><td>Reglas del negocio</td><td>Las mismas reglas, más el bloqueo, la suma de líneas repetidas y el <code>commit</code></td></tr>
+        <tr><td><code>dependencies.py</code></td><td>Repositorios únicos</td><td>Una sesión nueva por petición</td></tr>
+        <tr><td><code>schemas/</code></td><td>—</td><td><code>from_attributes</code> y <code>usuario_id</code> en <code>VentaIn</code></td></tr>
+        <tr><td><code>models.py</code>, <code>database.py</code>, <code>alembic/</code></td><td>No existen</td><td>Nuevos</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Diferencias entre la etapa 03 y la etapa 05.</figcaption>
+  </div>
+  <p>
+    Queda un problema a la vista: <code>VentaIn</code> trae un <code>usuario_id</code>, así que la caja dice quién
+    cobra y el servidor le cree. Cualquiera podría registrar ventas a nombre de otra persona. El módulo 06 lo resuelve
+    tomando el usuario del token de sesión, y su migración agrega las columnas de contraseña y rol.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animaciones</h2>
+
+  <h3>5.1 Del código al SQL</h3>
+  <p>
+    A la izquierda está <code>services/ventas.py</code> con su numeración real. A la derecha, el SQL que llega a
+    MariaDB en cada paso, tomado del registro del servidor al vender 0,350 kg de queso y 2 leches (los valores
+    aparecen reemplazados para leerlo mejor).
+  </p>
+
+  <div class="recorrido" id="recorrido-sql" tabindex="0">
+    <div class="escenarios" id="escenarios-sql">
+      <button type="button" class="escenario" data-escenario="ok" aria-pressed="true">Venta válida (COMMIT)</button>
+      <button type="button" class="escenario" data-escenario="error" aria-pressed="false">Sin stock (ROLLBACK)</button>
+    </div>
+    <div class="escena escena-dividida">
+      <div>
+        <p class="detalle-titulo">app/services/ventas.py</p>
+        <pre class="codigo-alto"><code id="codigo-servicio"></code></pre>
+      </div>
+      <div>
+        <p class="detalle-titulo">SQL enviado a MariaDB en este paso</p>
+        <pre class="envolver"><code id="sql-paso"></code></pre>
+      </div>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <h3>5.2 Dos cajas, un queso</h3>
+  <p>
+    La línea de tiempo es la salida real de <code>demo_concurrencia.py</code>. Hay 2,1 kg de queso y cada caja pide
+    1,5 kg, así que solo una venta debería pasar.
+  </p>
+
+  <div class="recorrido" id="recorrido-cajas" tabindex="0">
+    <div class="escenarios" id="escenarios-cajas">
+      <button type="button" class="escenario" data-escenario="sin" aria-pressed="true">Sin bloqueo</button>
+      <button type="button" class="escenario" data-escenario="con" aria-pressed="false">Con SELECT ... FOR UPDATE</button>
+    </div>
+    <div class="escena">
+      <div class="tabla">
+        <table class="tabla-animada">
+          <thead><tr><th>Tiempo</th><th>Caja 1</th><th>Caja 2</th><th>Stock guardado</th></tr></thead>
+          <tbody id="linea-tiempo"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Olvidar el <code>commit()</code>.</strong></p>
+    <p>La API responde 201, la venta aparece mientras dura la petición, y al cerrarse la sesión todo se descarta. En el registro del servidor, la transacción termina en <code>ROLLBACK</code> en lugar de <code>COMMIT</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Leer y después escribir sin bloqueo.</strong></p>
+    <p>Es el error de la actualización perdida: funciona en todas las pruebas con un solo usuario y falla el primer sábado con dos cajas abiertas. Toda lectura que decide una escritura sobre la misma fila va con <code>with_for_update()</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Devolver objetos ORM después de cerrar la sesión.</strong></p>
+    <p>Si una relación no se cargó, acceder a ella con la sesión cerrada lanza <code>DetachedInstanceError</code>. La etapa convierte todo a schemas dentro del service, con la sesión abierta.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Aplicar una migración autogenerada sin leerla.</strong></p>
+    <p>Si se renombra una columna en el modelo, la generación automática propone borrar la columna vieja y crear una nueva, y eso borra los datos. Siempre se revisa el archivo antes de <code>alembic upgrade</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escribir la contraseña de la base en el código.</strong></p>
+    <p>La etapa tiene un valor por defecto para aprender, pero <code>DATABASE_URL</code> se lee de una variable de entorno. En el servidor, la contraseña real va en un archivo <code>.env</code> que no se sube a git (módulo 10).</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Ignorar la zona horaria.</strong></p>
+    <p>MariaDB, dentro del contenedor, usa UTC. Una venta de las 23:30 hora local queda registrada al día siguiente, y el resumen «de hoy» sale mal. Lo habitual es guardar en UTC y convertir a la hora local al mostrar o al filtrar.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Comentá la línea <code>self.sesion.commit()</code> de <code>registrar</code>, registrá una venta y después listá las ventas. ¿Qué responde cada petición y qué muestra el registro del servidor?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>La venta responde 201 con un <code>id</code>, pero el listado no la muestra y el stock no cambió. El registro muestra los <code>INSERT</code> y el <code>UPDATE</code> (por el <code>flush</code>) seguidos de <code>ROLLBACK</code>: la sesión se cerró sin confirmar. Es el motivo por el que el commit es explícito.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> En <code>demo_concurrencia.py</code>, ¿qué pasa si se cambia <code>time.sleep(1.0)</code> por <code>time.sleep(0)</code> en la prueba sin bloqueo? ¿El problema desaparece?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Probablemente la segunda caja lea el stock después del commit de la primera y el resultado salga bien. El problema no desaparece: solo se vuelve menos probable y más difícil de reproducir. Los errores de concurrencia dependen del momento exacto, y por eso se previenen con bloqueos en lugar de confiar en que «no pasa».</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Cambiá la base a SQLite sin tocar el código: en una terminal nueva ejecutá <code>$env:DATABASE_URL = "sqlite:///./punto_lacteo.db"</code>, después <code>alembic upgrade head</code>, <code>python -m app.semilla</code> y <code>fastapi dev app/main.py</code>. ¿Funciona la venta? ¿Qué pasa con el <code>FOR UPDATE</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Funciona: se crea el archivo <code>punto_lacteo.db</code> con las mismas tablas. SQLite no tiene bloqueo por fila, así que SQLAlchemy omite <code>FOR UPDATE</code>; SQLite bloquea la base entera mientras alguien escribe. Para un solo puesto de venta alcanza; para varias cajas a la vez, un motor servidor como MariaDB o PostgreSQL es más adecuado.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Agregá al modelo <code>Producto</code> una columna <code>stock_minimo: Mapped[Decimal] = mapped_column(Numeric(10, 3), default=Decimal("0"), server_default="0")</code>, generá la migración con <code>alembic revision --autogenerate -m "stock minimo"</code> y leela antes de aplicarla. ¿Por qué hace falta <code>server_default</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>La migración tiene un <code>op.add_column</code> en <code>upgrade</code> y un <code>op.drop_column</code> en <code>downgrade</code>. <code>server_default</code> hace falta porque la tabla ya tiene filas: sin un valor por defecto en la base, MariaDB no puede agregar una columna <code>NOT NULL</code> a filas existentes. <code>default</code> solo lo usa Python al crear objetos nuevos.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>5.</strong> Escribí en el repositorio de ventas un método que devuelva el total vendido entre dos fechas, usando <code>func.sum</code>. Es la consulta que necesitará el resumen semanal del bot.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>from sqlalchemy import func
+
+def total_entre(self, desde: datetime, hasta: datetime) -&gt; Decimal:
+    consulta = select(func.coalesce(func.sum(Venta.total), 0)).where(Venta.fecha &gt;= desde, Venta.fecha &lt; hasta)
+    return self.sesion.scalar(consulta)</code></pre>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://docs.sqlalchemy.org/en/21/orm/quickstart.html">SQLAlchemy: inicio rápido del ORM (en inglés)</a></li>
+    <li><a href="https://docs.sqlalchemy.org/en/21/orm/session_basics.html">SQLAlchemy: uso de la sesión (en inglés)</a></li>
+    <li><a href="https://alembic.sqlalchemy.org/en/latest/tutorial.html">Alembic: tutorial (en inglés)</a></li>
+    <li><a href="https://alembic.sqlalchemy.org/en/latest/autogenerate.html">Alembic: generación automática y sus límites (en inglés)</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/sql-databases/">FastAPI: bases de datos SQL</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/dependencies/dependencies-with-yield/">FastAPI: dependencias con yield</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="04_base_de_datos.html">← Anterior: Módulo 04</a> ·
+    <a href="06_seguridad.html">Siguiente: Módulo 06, seguridad →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // ===================== 5.1 Del código al SQL =====================
+
+  // Copia exacta de app/services/ventas.py (numeración real).
+  const SERVICIO = `"""
+Registro de ventas con una transacción.
+
+Todo lo que pasa entre el primer SELECT y el commit() forma una sola transacción:
+si algo falla antes del commit, la sesión se cierra sin confirmar y MariaDB descarta
+los cambios (rollback). No puede quedar una venta guardada sin su descuento de stock.
+"""
+
+from collections import defaultdict
+from decimal import ROUND_HALF_UP, Decimal
+
+from sqlalchemy.orm import Session
+
+from app.errores import CantidadInvalida, ProductoNoEncontrado, StockInsuficiente, UsuarioNoEncontrado
+from app.models import Producto
+from app.repositories.productos import RepositorioProductos
+from app.repositories.ventas import RepositorioUsuarios, RepositorioVentas
+from app.schemas.venta import VentaIn, VentaOut
+
+CENTAVOS = Decimal("0.01")
+GRAMOS = Decimal("0.001")  # la misma escala que la columna DECIMAL(10, 3)
+
+
+class ServicioVentas:
+    def __init__(self, sesion: Session):
+        self.sesion = sesion
+        self.productos = RepositorioProductos(sesion)
+        self.ventas = RepositorioVentas(sesion)
+        self.usuarios = RepositorioUsuarios(sesion)
+
+    def registrar(self, venta: VentaIn) -> VentaOut:
+        if self.usuarios.obtener(venta.usuario_id) is None:
+            raise UsuarioNoEncontrado(venta.usuario_id)
+
+        # Si un producto aparece en varias líneas, se suman (el bug del ejercicio 2 del módulo 03).
+        pedidos: dict[int, Decimal] = defaultdict(Decimal)
+        for item in venta.items:
+            pedidos[item.producto_id] += item.cantidad
+
+        # 1. Bloquear y validar. Los productos se bloquean en orden de id para que dos ventas
+        #    simultáneas no se esperen mutuamente para siempre (deadlock).
+        lineas: list[tuple[Producto, Decimal]] = []
+        for producto_id in sorted(pedidos):
+            cantidad = pedidos[producto_id].quantize(GRAMOS)
+            producto = self.productos.obtener_para_actualizar(producto_id)
+            if producto is None:
+                raise ProductoNoEncontrado(producto_id)
+            if producto.unidad == "unidad" and cantidad != cantidad.to_integral_value():
+                raise CantidadInvalida(producto.nombre)
+            if producto.stock < cantidad:
+                raise StockInsuficiente(producto.nombre, producto.stock, cantidad)
+            lineas.append((producto, cantidad))
+
+        # 2. Escribir: descontar stock y guardar la venta con sus líneas.
+        for producto, cantidad in lineas:
+            self.productos.descontar_stock(producto, cantidad)
+        total = sum(
+            ((cantidad * producto.precio).quantize(CENTAVOS, rounding=ROUND_HALF_UP) for producto, cantidad in lineas),
+            Decimal("0"),
+        )
+        nueva = self.ventas.agregar(venta.usuario_id, lineas, total)
+
+        # 3. Confirmar. Recién acá los cambios quedan guardados y se liberan los bloqueos.
+        self.sesion.commit()
+        return VentaOut.model_validate(nueva)
+
+    def listar(self) -> list[VentaOut]:
+        return [VentaOut.model_validate(venta) for venta in self.ventas.listar()]`;
+
+  const SELECT_PRODUCTO = (id) => `SELECT producto.id, producto.nombre, producto.unidad, producto.precio, producto.stock
+FROM producto
+WHERE producto.id = ${id} FOR UPDATE`;
+
+  const PASOS_COMUNES = [
+    {
+      titulo: "El service recibe una sesión",
+      texto: "<p>La dependencia creó una sesión nueva para esta petición, y el service arma sus tres repositorios con <em>esa misma</em> sesión. Así, todo lo que hagan los repositorios forma parte de una única transacción. Todavía no se envió nada a la base: la sesión abre la conexión recién cuando hace falta.</p>",
+      lineas: [25, 26, 27, 28, 29],
+      sql: "(nada todavía)",
+    },
+    {
+      titulo: "Primera consulta: empieza la transacción",
+      texto: "<p><code>usuarios.obtener</code> usa <code>sesion.get(Usuario, 2)</code>. Como es la primera consulta, la sesión toma una conexión del pool y abre una transacción: en el registro aparece <code>BEGIN (implicit)</code>.</p>",
+      lineas: [32, 33],
+      sql: "BEGIN (implicit)\n\nSELECT usuario.id, usuario.nombre, usuario.telefono, usuario.rol\nFROM usuario\nWHERE usuario.id = 2",
+    },
+    {
+      titulo: "Python puro: se agrupan las líneas",
+      texto: "<p>Sumar las cantidades por producto no necesita la base. Si la caja mandara dos líneas de salame, acá se convierten en una sola, y el stock se compara contra el total pedido.</p>",
+      lineas: [36, 37, 38],
+      sql: "(sin SQL: este paso es Python)",
+    },
+    {
+      titulo: "Se bloquea el queso",
+      texto: "<p>Para el producto 1, <code>obtener_para_actualizar</code> hace un <code>SELECT ... FOR UPDATE</code>. Desde este momento, ninguna otra transacción puede modificar ni bloquear la fila del queso hasta que esta confirme o se descarte.</p>",
+      lineas: [43, 44, 45],
+      sql: SELECT_PRODUCTO(1),
+    },
+  ];
+
+  const ESCENARIOS_SQL = {
+    ok: [
+      ...PASOS_COMUNES,
+      {
+        titulo: "Se valida en Python y se bloquea la leche",
+        texto: "<p>Las tres reglas se comprueban con el objeto ya cargado, sin consultar de nuevo: el queso existe, se vende por kg y hay 2,100 kg. El ciclo pasa al producto 2 y lo bloquea de la misma forma.</p>",
+        lineas: [46, 47, 48, 49, 50, 51, 52],
+        sql: SELECT_PRODUCTO(2),
+      },
+      {
+        titulo: "Se modifica el stock… sin SQL",
+        texto: "<p><code>descontar_stock</code> hace <code>producto.stock -= cantidad</code>. No se envía ningún <code>UPDATE</code>: la sesión solo anota que esos dos objetos cambiaron. Esa anotación de cambios pendientes se llama <strong>unidad de trabajo</strong> (<em>unit of work</em>).</p>",
+        lineas: [55, 56],
+        sql: "(sin SQL: la sesión anota los cambios y espera)",
+      },
+      {
+        titulo: "flush(): se envían todos los cambios juntos",
+        texto: "<p><code>ventas.agregar</code> crea la venta con sus dos líneas y llama a <code>flush()</code>. La sesión envía, en orden, los dos <code>UPDATE</code> pendientes y los <code>INSERT</code>. MariaDB devuelve el <code>id</code> y la <code>fecha</code> de la venta con <code>RETURNING</code>. Todo sigue sin confirmar.</p>",
+        lineas: [57, 58, 59, 60, 61],
+        sql: "UPDATE producto SET stock=1.750 WHERE producto.id = 1\nUPDATE producto SET stock=22.000 WHERE producto.id = 2\n\nINSERT INTO venta (usuario_id, total) VALUES (2, 7275.00)\n    RETURNING venta.id, venta.fecha\n\nINSERT INTO venta_detalle (venta_id, producto_id, cantidad, precio_unitario)\n    VALUES (1, 1, 0.350, 12500.00), (1, 2, 2.000, 1450.00)",
+      },
+      {
+        titulo: "commit(): la venta queda guardada",
+        texto: "<p>Recién ahora los cambios son definitivos y visibles para las demás conexiones, y se liberan los bloqueos del queso y la leche. El schema de salida se arma con los valores que ya están en memoria (<code>expire_on_commit=False</code>), sin volver a consultar.</p>",
+        lineas: [64, 65],
+        sql: "COMMIT",
+      },
+    ],
+    error: [
+      ...PASOS_COMUNES,
+      {
+        titulo: "No alcanza: se lanza el error",
+        texto: "<p>Esta vez se piden 3 kg. La comparación de la línea 50 da verdadero y el service lanza <code>StockInsuficiente</code>. La ejecución sale de <code>registrar</code>: no se llega a las líneas 55 a 64.</p>",
+        lineas: [50, 51],
+        sql: "(sin SQL: la regla se evalúa en Python)",
+      },
+      {
+        titulo: "La sesión se cierra sin confirmar",
+        texto: "<p>La excepción sale de la ruta, la dependencia cierra la sesión con el <code>with</code> y SQLAlchemy envía <code>ROLLBACK</code>. El bloqueo del queso se libera y en la base no cambió nada. <code>main.py</code> traduce el error a 409, igual que en la etapa 03.</p>",
+        lineas: [0],
+        sql: "ROLLBACK",
+      },
+    ],
+  };
+
+  const raizSql = document.getElementById("recorrido-sql");
+  const recorridoSql = crearRecorrido(raizSql, ESCENARIOS_SQL.ok, (paso) => {
+    escribirCodigo(document.getElementById("codigo-servicio"), SERVICIO, paso.lineas);
+    document.getElementById("sql-paso").textContent = paso.sql;
+  });
+  conectarEscenarios(document.getElementById("escenarios-sql"), ESCENARIOS_SQL, recorridoSql);
+
+  // ===================== 5.2 Dos cajas, un queso =====================
+
+  // Cada fila: [tiempo, caja 1, caja 2, stock, estado de la celda de stock]
+  const FILAS = {
+    sin: [
+      ["0,0 s", "SELECT → lee 2,100 kg", "", "2,100 kg", ""],
+      ["0,2 s", "", "SELECT → lee 2,100 kg", "2,100 kg", ""],
+      ["1,0 s", "2,100 − 1,5 → guarda 0,600 y COMMIT", "", "0,600 kg", ""],
+      ["1,2 s", "", "2,100 − 1,5 → guarda 0,600 y COMMIT", "0,600 kg", "problema"],
+    ],
+    con: [
+      ["0,0 s", "SELECT … FOR UPDATE → lee 2,100 kg (bloquea)", "", "2,100 kg · bloqueada por la caja 1", ""],
+      ["0,2 s", "", "SELECT … FOR UPDATE → espera", "2,100 kg · bloqueada por la caja 1", ""],
+      ["1,0 s", "2,100 − 1,5 → guarda 0,600 y COMMIT (libera)", "", "0,600 kg", ""],
+      ["1,0 s", "", "recién ahora lee 0,600 kg → no alcanza, rechaza", "0,600 kg", "bien"],
+    ],
+  };
+
+  const TEXTOS_CAJAS = {
+    sin: [
+      ["La caja 1 lee el stock", "<p>La caja 1 consulta el queso con un <code>SELECT</code> común y ve 2,100 kg. Alcanza para 1,5 kg, así que empieza a cobrar.</p>"],
+      ["La caja 2 lee lo mismo", "<p>La caja 1 todavía no guardó nada, así que la caja 2 también ve 2,100 kg. Para ella también alcanza.</p>"],
+      ["La caja 1 guarda", "<p>La caja 1 calcula 2,100 − 1,5 = 0,600 y lo guarda. Hasta acá, todo bien.</p>"],
+      ["La caja 2 pisa el valor", "<p>La caja 2 calcula con el valor que leyó antes (2,100) y también guarda 0,600. Se vendieron 3 kg de un queso del que había 2,1 kg, y el stock dice 0,600 kg. El valor es válido para el <code>CHECK</code>, así que nadie lo detecta: es una <strong>actualización perdida</strong>.</p>"],
+    ],
+    con: [
+      ["La caja 1 lee y bloquea", "<p>La caja 1 consulta con <code>FOR UPDATE</code>: lee 2,100 kg y la fila del queso queda bloqueada a su nombre hasta que confirme.</p>"],
+      ["La caja 2 espera", "<p>La caja 2 pide la misma fila con <code>FOR UPDATE</code> y MariaDB la hace esperar. Su consulta no devuelve nada todavía: queda en pausa.</p>"],
+      ["La caja 1 confirma y libera", "<p>La caja 1 guarda 0,600 kg y hace <code>COMMIT</code>. En ese instante se libera el bloqueo.</p>"],
+      ["La caja 2 lee el valor real", "<p>La consulta de la caja 2 continúa y devuelve el stock actualizado: 0,600 kg. No alcanza para 1,5 kg, así que rechaza la venta. Resultado correcto: una sola venta y el stock coincide con lo vendido.</p>"],
+    ],
+  };
+
+  function construirPasosCajas(clave) {
+    return TEXTOS_CAJAS[clave].map(([titulo, texto], indice) => ({ titulo, texto, clave, hasta: indice }));
+  }
+
+  const cuerpoTiempo = document.getElementById("linea-tiempo");
+  const recorridoCajas = crearRecorrido(document.getElementById("recorrido-cajas"), construirPasosCajas("sin"), (paso) => {
+    cuerpoTiempo.replaceChildren();
+    FILAS[paso.clave].slice(0, paso.hasta + 1).forEach((fila, indice) => {
+      const tr = cuerpoTiempo.insertRow();
+      fila.slice(0, 4).forEach((valor, columna) => {
+        const td = tr.insertCell();
+        td.textContent = valor;
+        if (columna === 3 && fila[4]) td.classList.add(fila[4]);
+      });
+      if (indice === paso.hasta) tr.style.outline = "2px solid var(--aviso)";
+    });
+  });
+  conectarEscenarios(document.getElementById("escenarios-cajas"), {
+    sin: construirPasosCajas("sin"),
+    con: construirPasosCajas("con"),
+  }, recorridoCajas);
+</script>
+</body>
+</html>

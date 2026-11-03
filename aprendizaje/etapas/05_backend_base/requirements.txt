@@ -1,0 +1,7 @@
+fastapi[standard]
+# ORM: traduce clases de Python a tablas y consultas SQL
+sqlalchemy
+# Controlador (driver): habla el protocolo de red de MySQL/MariaDB
+pymysql
+# Migraciones: versiones del esquema de la base
+alembic
