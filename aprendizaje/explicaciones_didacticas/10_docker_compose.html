@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker Compose</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 10</span><span>90 min</span><span>Código: <code>aprendizaje/etapas/10_docker_compose</code></span></p>
+    <h1>Docker Compose: todo el sistema con un comando</h1>
+    <p>Cómo se empaqueta cada pieza en una imagen, cómo Compose las levanta juntas en una red propia y qué cambia respecto de ejecutarlas a mano.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    Para ver la etapa 09 funcionando hizo falta arrancar el contenedor de MariaDB, activar el entorno virtual, aplicar
+    las migraciones, cargar los datos, levantar el backend en una terminal y el frontend en otra, cada uno con su
+    puerto y su configuración. En el servidor de la facultad habría que repetir todo eso, instalar Python y Node en las
+    versiones correctas y asegurarse de que los procesos se reinicien si el servidor se apaga.
+  </p>
+  <p>
+    Docker empaqueta cada pieza en una <strong>imagen</strong> que trae todo lo que necesita. Docker Compose describe en
+    un archivo cómo se combinan esas piezas. Con eso, el sistema completo se levanta igual en cualquier máquina con
+    Docker, con un solo comando: <code>docker compose up -d --build</code>.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Imagen, contenedor y Dockerfile</h3>
+  <p>
+    Una <strong>imagen</strong> es un paquete de solo lectura con un sistema de archivos mínimo, un programa y sus
+    dependencias. Un <strong>contenedor</strong> es una imagen en ejecución, con su propia red y sus propios procesos.
+    Se pueden crear muchos contenedores de la misma imagen, y borrar un contenedor no borra la imagen.
+  </p>
+  <p>
+    Un <strong>Dockerfile</strong> es la receta para construir una imagen. Cada instrucción agrega una
+    <strong>capa</strong>: <code>FROM</code> elige la imagen base, <code>WORKDIR</code> fija la carpeta de trabajo,
+    <code>COPY</code> copia archivos del <strong>contexto</strong> (la carpeta que se le pasa a Docker),
+    <code>RUN</code> ejecuta un comando al construir y <code>CMD</code> define qué se ejecuta al arrancar el contenedor.
+  </p>
+  <p>
+    Docker guarda cada capa y la reutiliza mientras no cambie lo que la produjo. Por eso <code>api.Dockerfile</code>
+    copia primero <code>requirements.txt</code> e instala las dependencias, y recién después copia el código. Si se
+    modifica un router, Docker reutiliza la capa de dependencias y la reconstrucción tarda segundos en lugar de
+    minutos.
+  </p>
+
+  <h3>2.2 Construcción en dos etapas</h3>
+  <p>
+    El frontend necesita Node para construirse, pero no para servirse: en producción son archivos estáticos.
+    <code>web.Dockerfile</code> usa dos etapas. La primera parte de <code>node:24-alpine</code>, instala las dependencias
+    con <code>npm ci</code> (que respeta exactamente <code>package-lock.json</code>) y ejecuta <code>npm run build</code>.
+    La segunda parte de <code>nginx</code> y copia de la primera solo la carpeta <code>dist/</code>. La imagen final pesa
+    93 MB y no contiene Node ni el código fuente.
+  </p>
+
+  <h3>2.3 <code>compose.yaml</code></h3>
+  <p>
+    El archivo de Compose declara <strong>servicios</strong>, y cada servicio se convierte en un contenedor. La
+    <strong>Tabla 1</strong> resume los tres de la etapa.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Servicio</th><th>De dónde sale la imagen</th><th>Qué publica en la PC</th><th>Qué hace</th></tr></thead>
+      <tbody>
+        <tr><td><code>db</code></td><td><code>image: mariadb:11.4</code> (oficial)</td><td>Nada</td><td>Guarda los datos en el volumen <code>datos</code></td></tr>
+        <tr><td><code>api</code></td><td><code>build</code> con <code>api.Dockerfile</code> sobre la etapa 06</td><td>Nada</td><td>Aplica migraciones, carga datos iniciales y atiende la API en el puerto 8000</td></tr>
+        <tr><td><code>web</code></td><td><code>build</code> con <code>web.Dockerfile</code> sobre la etapa 09</td><td><code>8081:80</code></td><td>Sirve el frontend y reenvía <code>/api</code> al servicio <code>api</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Servicios de la etapa 10.</figcaption>
+  </div>
+  <p>
+    <code>ports: "8081:80"</code> publica el puerto 80 del contenedor en el 8081 de la PC. <code>environment</code> pasa
+    variables de entorno, y <code>${VARIABLE}</code> toma su valor del archivo <code>.env</code>. <code>depends_on</code>
+    ordena el arranque, y con <code>condition: service_healthy</code> el backend espera a que la base responda, no solo
+    a que su contenedor haya arrancado. Para saber si responde, el servicio <code>db</code> declara un
+    <code>healthcheck</code>: un comando que Docker ejecuta cada 5 segundos.
+  </p>
+
+  <h3>2.4 La red: cada servicio se llama por su nombre</h3>
+  <p>
+    Compose crea una red privada (<code>punto-lacteo_default</code>) y conecta los tres contenedores. Dentro de esa red,
+    el nombre de cada servicio funciona como dirección. Este es el cambio más importante respecto de los módulos
+    anteriores: dentro de un contenedor, <code>127.0.0.1</code> es <em>ese mismo contenedor</em>, no la PC. Por eso el
+    backend se conecta a <code>db:3306</code> y nginx reenvía a <code>http://api:8000</code>.
+  </p>
+  <p>
+    Como la base no tiene <code>ports</code>, nadie fuera de la red puede conectarse a ella. Solo el servicio
+    <code>web</code> queda expuesto, y todo lo demás pasa por él.
+  </p>
+
+  <h3>2.5 Volúmenes: los datos fuera del contenedor</h3>
+  <p>
+    Un contenedor es descartable: <code>docker compose down</code> lo borra, y una actualización lo reemplaza por uno
+    nuevo. Los datos de MariaDB no pueden vivir adentro. El <strong>volumen</strong> <code>datos</code> es un
+    almacenamiento que administra Docker y que se monta en <code>/var/lib/mysql</code>. Sobrevive a
+    <code>down</code> y a las reconstrucciones. Solo se borra con <code>docker compose down -v</code> o
+    <code>docker volume rm</code>, y por eso ese comando se usa con cuidado.
+  </p>
+
+  <h3>2.6 Configuración y secretos</h3>
+  <p>
+    Las contraseñas de la base y la <code>CLAVE_SECRETA</code> no están en <code>compose.yaml</code>: están en
+    <code>.env</code>, que git ignora. El repositorio incluye <code>.env.ejemplo</code> con los nombres de las variables y
+    valores de relleno. En el servidor se crea un <code>.env</code> propio con valores reales. Así el mismo
+    <code>compose.yaml</code> sirve para la PC y para el servidor.
+  </p>
+
+  <h3>2.7 nginx: el proxy de producción</h3>
+  <p>
+    nginx es un servidor web que hace dos trabajos en la etapa: entrega los archivos de <code>dist/</code> y funciona
+    como <strong>proxy inverso</strong> para <code>/api</code>. Es el reemplazo del proxy de Vite del módulo 09, con la
+    misma regla: <code>/api/productos</code> se reenvía a <code>http://api:8000/productos</code>. Por eso el frontend no
+    cambió nada para funcionar en producción. En un despliegue público, este mismo nginx (u otro delante, como el
+    <code>swag</code> que usa la materia IoT) es donde se agrega HTTPS con un certificado.
+  </p>
+
+  <h3>2.8 Qué pasa en cada arranque</h3>
+  <p>
+    El <code>CMD</code> del backend ejecuta tres comandos encadenados: <code>alembic upgrade head</code>,
+    <code>python -m app.semilla</code> y <code>fastapi run</code>. En el primer arranque, Alembic crea las tablas y la
+    semilla carga usuarios y productos. En los siguientes, Alembic ve que la base ya está en la última versión, la
+    semilla ve que ya hay datos, y ninguno hace nada. Cuando el proyecto real agregue una migración, desplegarla será
+    reconstruir y reiniciar: la migración se aplica sola.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>El servicio del backend en <code>compose.yaml</code>:</p>
+  <pre><code>api:
+  build:
+    context: ../06_seguridad
+    dockerfile: ../10_docker_compose/api.Dockerfile
+  environment:
+    DATABASE_URL: mariadb+pymysql://${DB_USER}:${DB_PASSWORD}@db:3306/punto_lacteo?charset=utf8mb4
+    CLAVE_SECRETA: ${CLAVE_SECRETA}
+  depends_on:
+    db:
+      condition: service_healthy</code></pre>
+
+  <p>La receta del backend, con las dependencias antes que el código para aprovechar la caché:</p>
+  <pre><code>FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["sh", "-c", "alembic upgrade head &amp;&amp; python -m app.semilla &amp;&amp; fastapi run app/main.py --host 0.0.0.0 --port 8000"]</code></pre>
+
+  <p>El reenvío de la API en <code>nginx.conf</code>:</p>
+  <pre><code>location /api/ {
+    proxy_pass http://api:8000/;     # la barra final quita el prefijo /api
+}</code></pre>
+
+  <p>Desde la carpeta de la etapa:</p>
+  <pre><code>docker compose up -d --build    # construye y levanta todo; después, http://localhost:8081
+docker compose logs -f api      # registros del backend en vivo
+docker compose down             # detiene todo (los datos quedan en el volumen)</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>Cada cosa que se hacía a mano tiene ahora su lugar en un archivo (<strong>Tabla 2</strong>).</p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>A mano (módulos 04 a 09)</th><th>Con Compose</th></tr></thead>
+      <tbody>
+        <tr><td><code>docker run ... -p 3307:3306 mariadb:11.4</code></td><td>Servicio <code>db</code>, sin puerto publicado</td></tr>
+        <tr><td>Activar el venv y <code>pip install</code></td><td><code>RUN pip install</code> en <code>api.Dockerfile</code></td></tr>
+        <tr><td><code>alembic upgrade head</code> y <code>python -m app.semilla</code></td><td>El <code>CMD</code> del backend, en cada arranque</td></tr>
+        <tr><td><code>fastapi dev app/main.py</code> en <code>127.0.0.1:8000</code></td><td><code>fastapi run</code> en <code>0.0.0.0:8000</code>, dentro de la red</td></tr>
+        <tr><td><code>DATABASE_URL</code> con <code>127.0.0.1:3307</code></td><td><code>DATABASE_URL</code> con <code>db:3306</code></td></tr>
+        <tr><td><code>npm run dev</code> y el proxy de Vite</td><td><code>npm run build</code> en la imagen y nginx como proxy</td></tr>
+        <tr><td><code>CLAVE_SECRETA</code> con valor de desarrollo</td><td><code>CLAVE_SECRETA</code> desde <code>.env</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Lo que se hacía a mano y lo que lo reemplaza en la etapa 10.</figcaption>
+  </div>
+  <div class="nota">
+    <p><strong>Para el proyecto real.</strong> Desplegar en el servidor de la facultad es copiar el repositorio, crear
+    un <code>.env</code> con valores reales y ejecutar <code>docker compose up -d --build</code>. Faltan tres cosas que
+    este material no cubre: HTTPS con un certificado, copias de seguridad periódicas del volumen (por ejemplo, con
+    <code>mariadb-dump</code>) y que Docker reinicie los servicios si el servidor se reinicia (<code>restart:
+    unless-stopped</code> en cada servicio).</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: el sistema en contenedores</h2>
+  <p>Los registros y las respuestas son los de la prueba de la etapa.</p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="arranque" aria-pressed="true">docker compose up</button>
+      <button type="button" class="escenario" data-escenario="peticion" aria-pressed="false">Una venta desde el navegador</button>
+      <button type="button" class="escenario" data-escenario="bajada" aria-pressed="false">down y down -v</button>
+    </div>
+    <div class="escena">
+      <svg class="diagrama" id="diagrama" viewBox="0 0 960 320" role="img" aria-label="Contenedores de Compose, su red y el volumen de datos">
+        <rect class="zona" x="200" y="25" width="590" height="280" rx="14"/>
+        <text class="etiqueta-zona" x="216" y="48">Red de Compose: punto-lacteo_default</text>
+        <line class="linea" x1="170" y1="150" x2="230" y2="150"/>
+        <line class="linea" x1="390" y1="150" x2="425" y2="150"/>
+        <line class="linea" x1="585" y1="150" x2="620" y2="150"/>
+        <line class="linea" x1="770" y1="150" x2="815" y2="150"/>
+        <line class="pista" x1="20" y1="270" x2="940" y2="270"/>
+        <text class="sub" x="200" y="140" text-anchor="middle">:8081</text>
+        <g class="nodo" id="n-navegador"><rect x="20" y="95" width="150" height="110" rx="12"/>
+          <text class="titulo-nodo" x="95" y="135" text-anchor="middle">Navegador</text>
+          <text class="sub" x="95" y="157" text-anchor="middle">localhost:8081</text></g>
+        <g class="nodo" id="n-web"><rect x="230" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="310" y="135" text-anchor="middle">web</text>
+          <text class="sub" x="310" y="157" text-anchor="middle">nginx + dist/</text>
+          <text class="sub" x="310" y="177" text-anchor="middle">/api → api:8000</text></g>
+        <g class="nodo" id="n-api"><rect x="425" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="505" y="135" text-anchor="middle">api</text>
+          <text class="sub" x="505" y="157" text-anchor="middle">FastAPI (etapa 06)</text>
+          <text class="sub" x="505" y="177" text-anchor="middle">:8000</text></g>
+        <g class="nodo" id="n-db"><rect x="620" y="95" width="150" height="110" rx="12"/>
+          <text class="titulo-nodo" x="695" y="135" text-anchor="middle">db</text>
+          <text class="sub" x="695" y="157" text-anchor="middle">MariaDB 11.4</text>
+          <text class="sub" x="695" y="177" text-anchor="middle">:3306 (no publicado)</text></g>
+        <g class="nodo" id="n-volumen"><rect x="815" y="95" width="130" height="110" rx="12"/>
+          <text class="titulo-nodo" x="880" y="135" text-anchor="middle">Volumen</text>
+          <text class="sub" x="880" y="157" text-anchor="middle">datos</text>
+          <text class="sub" x="880" y="177" text-anchor="middle">/var/lib/mysql</text></g>
+        <g class="paquete"><rect x="-40" y="-15" width="80" height="30" rx="15"/><text x="0" y="5" text-anchor="middle"></text></g>
+      </svg>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle"><p class="detalle-titulo"></p><pre class="envolver"><code></code></pre></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Usar <code>127.0.0.1</code> o <code>localhost</code> entre contenedores.</strong></p>
+    <p>Dentro del contenedor <code>api</code>, <code>127.0.0.1</code> es el propio contenedor, donde no hay ningún MariaDB. La conexión falla con «Connection refused». Entre servicios se usa el nombre del servicio: <code>db</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Copiar <code>node_modules</code> de Windows a la imagen.</strong></p>
+    <p>Algunas dependencias traen programas compilados para el sistema operativo donde se instalaron, y los de Windows no funcionan en el Linux del contenedor. <code>web.Dockerfile.dockerignore</code> lo excluye, y la imagen instala todo de nuevo con <code>npm ci</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Ejecutar <code>docker compose down -v</code> sin pensar.</strong></p>
+    <p>La opción <code>-v</code> borra el volumen y, con él, todas las ventas. Para detener el sistema alcanza con <code>down</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Confiar en <code>depends_on</code> sin <code>healthcheck</code>.</strong></p>
+    <p>Sin la condición <code>service_healthy</code>, el backend arranca apenas arranca el contenedor de la base, que todavía tarda unos segundos en aceptar conexiones. Alembic falla y el backend se detiene.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escuchar en <code>127.0.0.1</code> dentro del contenedor.</strong></p>
+    <p>Un servidor que escucha en <code>127.0.0.1</code> solo acepta conexiones del propio contenedor, y nginx no llega. Dentro de un contenedor se escucha en <code>0.0.0.0</code>: por eso el <code>CMD</code> usa <code>--host 0.0.0.0</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Subir el <code>.env</code> al repositorio.</strong></p>
+    <p>Tiene las contraseñas y la clave que firma los tokens. Se sube <code>.env.ejemplo</code>, con los nombres y valores de relleno.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Cambiá un texto de <code>Carrito.tsx</code> en la etapa 09 y ejecutá <code>docker compose up -d --build</code>. ¿Qué imágenes se reconstruyen? ¿Qué capas se reutilizan?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Solo se reconstruye <code>web</code>, porque el contexto de <code>api</code> no cambió. Dentro de <code>web</code>, la capa de <code>npm ci</code> se reutiliza (aparece como <code>CACHED</code>), porque <code>package.json</code> y <code>package-lock.json</code> no cambiaron. Se repiten <code>COPY . .</code> y <code>npm run build</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Registrá una venta, ejecutá <code>docker compose down</code> y después <code>up -d</code>. ¿Sigue la venta? ¿Qué muestra <code>docker compose logs api</code> sobre las migraciones?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Sí: la venta está en el volumen. Los registros no muestran ningún «Running upgrade», porque la base ya está en la migración <code>0002</code>, y la semilla solo informa «Datos iniciales listos.» sin cargar nada.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Abrí una consola SQL dentro del contenedor de la base con <code>docker compose exec db mariadb -u pl -p punto_lacteo</code> y contá las ventas. ¿Por qué funciona si la base no publica ningún puerto?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p><code>exec</code> ejecuta el cliente <code>mariadb</code> dentro del mismo contenedor que el servidor, así que se conecta localmente, sin pasar por la red. Publicar un puerto solo hace falta para conectarse desde afuera de Docker.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Agregá <code>restart: unless-stopped</code> a los tres servicios. ¿Qué pasa si reiniciás Docker Desktop? ¿Por qué importa en el servidor de la facultad?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Al volver Docker, los contenedores arrancan solos, salvo que se hayan detenido a mano con <code>docker compose stop</code> o <code>down</code>. En el servidor, eso significa que un corte de luz o un reinicio no deja el sistema apagado hasta que alguien lo note.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://docs.docker.com/compose/">Docker Compose: introducción (en inglés)</a></li>
+    <li><a href="https://docs.docker.com/reference/compose-file/services/">Docker Compose: referencia de servicios (en inglés)</a></li>
+    <li><a href="https://docs.docker.com/build/building/multi-stage/">Docker: construcción en varias etapas (en inglés)</a></li>
+    <li><a href="https://docs.docker.com/build/cache/">Docker: caché de capas (en inglés)</a></li>
+    <li><a href="https://docs.docker.com/engine/storage/volumes/">Docker: volúmenes (en inglés)</a></li>
+    <li><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass">nginx: proxy_pass (en inglés)</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/deployment/docker/">FastAPI: despliegue con Docker</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="09_front_back.html">← Anterior: Módulo 09</a> ·
+    <a href="index.html">Volver al índice</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  const POS = { navegador: [95, 270], web: [310, 270], api: [505, 270], db: [695, 270], volumen: [880, 270] };
+
+  const ESCENARIOS = {
+    arranque: [
+      {
+        titulo: "Se construyen las imágenes",
+        texto: "<p><code>--build</code> le pide a Compose que construya <code>api</code> y <code>web</code> con sus Dockerfiles. La imagen de <code>db</code> no se construye: se descarga la oficial de MariaDB.</p>",
+        nodos: { web: "activo", api: "activo" }, paquete: null,
+        detalle: { titulo: "Salida de docker compose up -d --build", codigo: " Image punto-lacteo-api Built\n Image punto-lacteo-web Built" },
+      },
+      {
+        titulo: "Se crean la red y el volumen",
+        texto: "<p>Compose crea la red privada <code>punto-lacteo_default</code> y el volumen <code>punto-lacteo_datos</code>. El volumen solo se crea la primera vez; después se reutiliza.</p>",
+        nodos: { volumen: "activo" }, paquete: null,
+        detalle: { titulo: "Salida", codigo: " Network punto-lacteo_default Created\n Volume punto-lacteo_datos Created" },
+      },
+      {
+        titulo: "Arranca la base y Compose espera",
+        texto: "<p><code>db</code> arranca primero, porque los demás dependen de ella. Compose ejecuta el <code>healthcheck</code> cada 5 segundos y no arranca <code>api</code> hasta que la base responde.</p>",
+        nodos: { db: "activo", volumen: "activo" }, paquete: { en: "db", etiqueta: "healthcheck.sh" },
+        detalle: { titulo: "Salida", codigo: " Container punto-lacteo-db-1 Started\n Container punto-lacteo-db-1 Waiting\n Container punto-lacteo-db-1 Healthy" },
+      },
+      {
+        titulo: "El backend migra, carga y escucha",
+        texto: "<p>Con la base lista, arranca <code>api</code>. Su <code>CMD</code> aplica las dos migraciones (la base estaba vacía), carga usuarios y productos, y levanta el servidor en <code>0.0.0.0:8000</code>, solo dentro de la red.</p>",
+        nodos: { api: "ok", db: "activo" }, paquete: { en: "api", etiqueta: "alembic · semilla · fastapi run", tipo: "ok" },
+        detalle: { titulo: "docker compose logs api", codigo: "Running upgrade  -> 0001, esquema inicial\nRunning upgrade 0001 -> 0002, contrasena de usuario\nContraseña de prueba asignada a Ana (duenio).\n…\nSe cargaron 5 productos.\nUvicorn running on http://0.0.0.0:8000" },
+      },
+      {
+        titulo: "Arranca nginx y publica el 8081",
+        texto: "<p>Por último arranca <code>web</code>. Es el único servicio con <code>ports</code>, así que es la única puerta de entrada desde la PC: <code>http://localhost:8081</code>.</p>",
+        nodos: { web: "ok" }, paquete: { en: "web", etiqueta: "0.0.0.0:8081 → 80", tipo: "ok" },
+        detalle: { titulo: "docker compose ps", codigo: "SERVICE   STATUS                    PORTS\napi       Up 19 seconds             8000/tcp\ndb        Up 40 seconds (healthy)   3306/tcp\nweb       Up 19 seconds             0.0.0.0:8081->80/tcp" },
+      },
+    ],
+    peticion: [
+      {
+        titulo: "El navegador pide la página",
+        texto: "<p>La cajera abre <code>http://localhost:8081</code>. nginx entrega <code>index.html</code> y los archivos de <code>dist/</code>. Es la misma pantalla de la etapa 09, ya construida.</p>",
+        nodos: { navegador: "activo", web: "activo" }, paquete: { en: "web", etiqueta: "GET / → index.html" },
+        detalle: { titulo: "Respuesta", codigo: "200 text/html" },
+      },
+      {
+        titulo: "La venta va a /api",
+        texto: "<p>Al cobrar, el frontend envía <code>POST /api/ventas</code> a su mismo origen, como en la etapa 09. Esta vez no hay Vite: la recibe nginx.</p>",
+        nodos: { navegador: "activo", web: "activo" }, paquete: { en: "web", etiqueta: "POST /api/ventas" },
+        detalle: { titulo: "Petición", codigo: 'POST http://localhost:8081/api/ventas\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIsInR5c…\n\n{"items": [{"producto_id": 1, "cantidad": "0.350"}, {"producto_id": 2, "cantidad": "2"}]}' },
+      },
+      {
+        titulo: "nginx reenvía al servicio api",
+        texto: "<p><code>location /api/</code> coincide, y <code>proxy_pass http://api:8000/</code> la reenvía quitando el prefijo. <code>api</code> es un nombre dentro de la red de Compose: desde la PC no existe.</p>",
+        nodos: { web: "ok", api: "activo" }, paquete: { en: "api", etiqueta: "http://api:8000/ventas" },
+        detalle: { titulo: "nginx.conf", codigo: "location /api/ {\n    proxy_pass http://api:8000/;\n}" },
+      },
+      {
+        titulo: "El backend escribe en db",
+        texto: "<p>El backend se conecta a <code>db:3306</code>, como dice su <code>DATABASE_URL</code>, y registra la venta en una transacción. MariaDB guarda los datos en el volumen.</p>",
+        nodos: { api: "activo", db: "ok", volumen: "ok" }, paquete: { en: "db", etiqueta: "db:3306 · COMMIT", tipo: "ok" },
+        detalle: { titulo: "Variable de entorno del servicio api", codigo: "DATABASE_URL=mariadb+pymysql://pl:…@db:3306/punto_lacteo?charset=utf8mb4" },
+      },
+      {
+        titulo: "La respuesta vuelve por el mismo camino",
+        texto: "<p>La respuesta 201 vuelve de <code>api</code> a nginx y de nginx al navegador. El total es el mismo que en todos los módulos anteriores: el código no cambió, solo dónde se ejecuta.</p>",
+        nodos: { navegador: "ok" }, paquete: { en: "navegador", etiqueta: "201 · total $7.275", tipo: "ok" },
+        detalle: { titulo: "Respuesta (real)", codigo: '201 Created\n{"id":1,"fecha":"2026-11-03T04:29:36","usuario_id":2,"items":[…],"total":"7275.00"}' },
+      },
+    ],
+    bajada: [
+      {
+        titulo: "docker compose down",
+        texto: "<p><code>down</code> detiene y borra los tres contenedores y la red. El volumen no se toca.</p>",
+        nodos: { volumen: "ok" }, paquete: { en: "volumen", etiqueta: "datos intactos", tipo: "ok" },
+        detalle: { titulo: "Salida", codigo: " Container punto-lacteo-web-1 Removed\n Container punto-lacteo-api-1 Removed\n Container punto-lacteo-db-1 Removed\n Network punto-lacteo_default Removed\n\nvolumen punto-lacteo_datos: sigue existiendo" },
+      },
+      {
+        titulo: "docker compose up -d: todo vuelve",
+        texto: "<p>Se crean contenedores nuevos que montan el mismo volumen. Alembic no aplica nada (la base ya está en <code>0002</code>), la semilla no carga nada y la venta anterior sigue ahí.</p>",
+        nodos: { db: "ok", api: "ok", volumen: "ok" }, paquete: { en: "api", etiqueta: "ventas: 1", tipo: "ok" },
+        detalle: { titulo: "docker compose logs api", codigo: "Datos iniciales listos.\nUvicorn running on http://0.0.0.0:8000\n\nGET /api/ventas → 1 venta" },
+      },
+      {
+        titulo: "docker compose down -v: se borra todo",
+        texto: "<p>Con <code>-v</code>, además de los contenedores se borra el volumen. El siguiente <code>up</code> parte de una base vacía: migraciones y semilla de nuevo, y todas las ventas perdidas. En el sistema real, esto solo se hace a propósito y con una copia de seguridad.</p>",
+        nodos: { volumen: "error" }, paquete: { en: "volumen", etiqueta: "volumen borrado", tipo: "error" },
+        detalle: { titulo: "Qué se pierde", codigo: "productos, usuarios, ventas, contraseñas: todo lo que estaba en punto-lacteo_datos" },
+      },
+    ],
+  };
+
+  const raiz = document.getElementById("recorrido");
+  const dibujar = crearDiagrama(document.getElementById("diagrama"), POS);
+  const recorrido = crearRecorrido(raiz, ESCENARIOS.arranque, (paso) => {
+    dibujar(paso);
+    mostrarDetalle(raiz, paso.detalle);
+  });
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

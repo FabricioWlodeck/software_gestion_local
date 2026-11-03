@@ -1,0 +1,53 @@
+# Etapa 10 - Todo el sistema con un solo comando:  docker compose up -d --build
+#
+# Tres servicios en una red privada. Dentro de la red, cada servicio se encuentra
+# por su nombre: el backend se conecta a "db", y nginx le pasa la API a "api".
+# Desde la PC solo se publica el puerto 8081 (nginx).
+
+name: punto-lacteo
+
+services:
+  # Base de datos. Los datos viven en el volumen "datos", no dentro del contenedor.
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: punto_lacteo
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - datos:/var/lib/mysql
+    # Sin "ports": la base no se publica en la PC, solo la ven los servicios de esta red.
+    healthcheck:
+      # healthcheck.sh viene en la imagen oficial: responde OK cuando MariaDB acepta conexiones.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Backend: la etapa 06 empaquetada en una imagen.
+  api:
+    build:
+      context: ../06_seguridad
+      dockerfile: ../10_docker_compose/api.Dockerfile
+    environment:
+      DATABASE_URL: mariadb+pymysql://${DB_USER}:${DB_PASSWORD}@db:3306/punto_lacteo?charset=utf8mb4
+      CLAVE_SECRETA: ${CLAVE_SECRETA}
+    depends_on:
+      db:
+        condition: service_healthy # espera a que la base esté lista, no solo arrancada
+
+  # Frontend: la etapa 09 construida y servida por nginx, que además reenvía /api al backend.
+  web:
+    build:
+      context: ../09_front_back
+      dockerfile: ../10_docker_compose/web.Dockerfile
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8081:80" # http://localhost:8081 en la PC → puerto 80 del contenedor
+    depends_on:
+      - api
+
+volumes:
+  datos:

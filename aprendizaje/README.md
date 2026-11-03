@@ -12,7 +12,7 @@ El mini proyecto no es la base del sistema real. El MVP (*Minimum Viable Product
 4. Ejecutar la etapa de código correspondiente siguiendo su `README.md`.
 5. Resolver los ejercicios antes de abrir las respuestas.
 
-Cada módulo está pensado para estudiarse en 1 a 1,5 h.
+Cada módulo está pensado para estudiarse en 45 a 100 minutos; el índice indica la duración de cada uno.
 
 ## Temario
 
@@ -28,20 +28,29 @@ Cada módulo está pensado para estudiarse en 1 a 1,5 h.
 | 07 | JavaScript vs TypeScript | ¿Qué agrega TypeScript y cuánto cuesta usarlo? | [`etapas/07_js_vs_ts`](etapas/07_js_vs_ts/README.md) | Disponible |
 | 08 | React + Vite | ¿Cómo se crea, declara e inicializa una interfaz hecha con componentes? | [`etapas/08_react_vite`](etapas/08_react_vite/README.md) | Disponible |
 | 09 | Frontend ↔ backend | ¿Cómo consume React la API y cómo maneja el inicio de sesión? | [`etapas/09_front_back`](etapas/09_front_back/README.md) | Disponible |
-| 10 | Docker Compose | ¿Cómo se empaqueta todo lo que antes se ejecutó a mano? | `etapas/10_docker_compose` | Pendiente |
+| 10 | Docker Compose | ¿Cómo se empaqueta todo lo que antes se ejecutó a mano? | [`etapas/10_docker_compose`](etapas/10_docker_compose/README.md) | Disponible |
 
 ## Estructura de carpetas
 
 ```
 aprendizaje/
-├── README.md                     ← este archivo
+├── README.md                       ← este archivo
+├── .venv/                          ← entorno virtual compartido (git lo ignora; ver etapa 02)
 ├── explicaciones_didacticas/
-│   ├── index.html                ← punto de entrada
-│   ├── comun/                    ← estilos y motor de animaciones compartidos
-│   ├── 00_mapa_general.html
-│   └── 01_http_rest.html
-└── etapas/                       ← código ejecutable, una carpeta por módulo
-    └── 01_http/
+│   ├── index.html                  ← punto de entrada
+│   ├── comun/                      ← estilos y motor de animaciones compartidos
+│   └── 00_mapa_general.html … 10_docker_compose.html
+└── etapas/                         ← código ejecutable, una carpeta por módulo
+    ├── 01_http/                    servidor y cliente HTTP con la biblioteca estándar
+    ├── 02_fastapi_basico/          la misma API con FastAPI, en un archivo
+    ├── 03_fastapi_estructurado/    capas: routers, schemas, services, repositories
+    ├── 04_base_de_datos/           esquema, datos y consultas en SQL
+    ├── 05_backend_base/            SQLAlchemy, transacciones y Alembic
+    ├── 06_seguridad/               Argon2, JWT y roles
+    ├── 07_js_vs_ts/                el mismo carrito en JavaScript y TypeScript
+    ├── 08_react_vite/              la caja en React, con datos de prueba
+    ├── 09_front_back/              la caja conectada a la API de la etapa 06
+    └── 10_docker_compose/          todo el sistema en contenedores
 ```
 
 ## Requisitos
@@ -50,8 +59,17 @@ aprendizaje/
 |---|---|---|
 | Python | 3.12 | 01 |
 | Node.js | 24 | 07 |
-| Docker Desktop | 29 | 04 (solo para el contenedor de MariaDB) |
+| Docker Desktop | 29 | 04 (MariaDB) y 10 (todo el sistema) |
 | git | 2.52 | Siempre |
+
+## Puertos
+
+| Puerto en la PC | Qué lo usa | Módulos |
+|---|---|---|
+| 8000 | El backend, ejecutado con `fastapi dev` o con los servidores de la etapa 01 | 01 a 06, 09 |
+| 3307 | El contenedor `pl-mariadb` (el 3306 lo usa el MariaDB de la materia IoT) | 04 a 06, 09 |
+| 5173 | El servidor de desarrollo de Vite | 08 y 09 |
+| 8081 | nginx de Docker Compose (el 8080 lo usa el phpMyAdmin de la materia IoT) | 10 |
 
 ## Decisiones acordadas
 

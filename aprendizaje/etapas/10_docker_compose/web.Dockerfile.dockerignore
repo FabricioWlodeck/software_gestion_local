@@ -1,0 +1,6 @@
+# Lo que no se copia a la imagen del frontend (se aplica solo a web.Dockerfile).
+# node_modules se excluye siempre: se instala dentro de la imagen con npm ci,
+# y el de Windows tiene programas compilados para Windows que no funcionan en Linux.
+node_modules/
+dist/
+README.md

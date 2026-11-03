@@ -1,0 +1,8 @@
+# Lo que no se copia a la imagen del backend (se aplica solo a api.Dockerfile).
+__pycache__/
+*.pyc
+*.db
+.env
+README.md
+explorar_seguridad.py
+ejemplos/
