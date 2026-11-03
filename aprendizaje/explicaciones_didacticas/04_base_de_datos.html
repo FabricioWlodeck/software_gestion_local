@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Diseño de la base de datos</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 04</span><span>90 min</span><span>Código: <code>aprendizaje/etapas/04_base_de_datos</code></span></p>
+    <h1>Diseño de la base de datos: de una planilla a tablas normalizadas</h1>
+    <p>Qué es una base de datos relacional, cómo se declaran tablas, claves y restricciones, y por qué se normaliza hasta la tercera forma normal.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    Hasta la etapa 03, los productos y las ventas viven en diccionarios de Python. Se pierden al reiniciar el
+    servidor, no se comparten entre dos procesos y no hay forma de consultarlos («¿cuánto queso se vendió esta
+    semana?») sin escribir un programa.
+  </p>
+  <p>
+    Muchos negocios resuelven esto con una planilla de cálculo. La <strong>Tabla 1</strong> es la forma en que
+    Punto Lácteo podría anotar sus ventas en Excel. Parece práctica, pero mezcla datos de cuatro cosas distintas
+    (ventas, cajeras, productos y líneas de cada venta) en una sola fila, y eso trae problemas en cuanto los datos
+    cambian. Este módulo transforma esa planilla en tablas bien diseñadas y las crea en MariaDB.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>nro_venta</th><th>fecha</th><th>cajera</th><th>telefono_cajera</th><th>productos</th><th>total</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>2026-11-02 09:15</td><td>Bruno</td><td>555-0102</td><td>Queso cremoso 0,350 kg x $12500; Leche entera 1 L 2 u x $1450</td><td>7275.00</td></tr>
+        <tr><td>2</td><td>2026-11-02 10:40</td><td>Carla</td><td>555-0103</td><td>Salame milán 0,200 kg x $18900</td><td>3780.00</td></tr>
+        <tr><td>3</td><td>2026-11-02 11:05</td><td>Bruno</td><td>555-0102</td><td>Leche entera 1 L 1 u x $1450; Yogur bebible 1 L 1 u x $2300</td><td>3750.00</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Planilla de ventas original (<code>planilla_original.csv</code>). Los teléfonos son ficticios.</figcaption>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Base de datos relacional</h3>
+  <p>
+    Una base de datos relacional guarda los datos en <strong>tablas</strong>. Cada tabla representa un tipo de cosa
+    (productos, ventas), cada <strong>fila</strong> es una cosa concreta y cada <strong>columna</strong> es un dato de
+    esa cosa, con un tipo fijo. Las tablas se vinculan entre sí a través de columnas que guardan identificadores.
+  </p>
+  <p>
+    MariaDB es un SGBD (Sistema de Gestión de Bases de Datos): un programa servidor que guarda las tablas en disco,
+    escucha conexiones (por defecto en el puerto 3306) y ejecuta las órdenes que recibe en SQL. Así como Uvicorn
+    atiende HTTP, MariaDB atiende SQL. El backend es su cliente, igual que el navegador es cliente del backend.
+  </p>
+
+  <h3>2.2 Tipos de datos</h3>
+  <p>
+    Cada columna tiene un tipo, y la base rechaza los valores que no lo cumplen. La <strong>Tabla 2</strong> muestra
+    los que usa el esquema.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Tipo</th><th>Qué guarda</th><th>Uso en Punto Lácteo</th></tr></thead>
+      <tbody>
+        <tr><td><code>INT</code></td><td>Enteros</td><td>Identificadores (<code>id</code>, <code>usuario_id</code>)</td></tr>
+        <tr><td><code>VARCHAR(n)</code></td><td>Texto de hasta n caracteres</td><td>Nombres, teléfonos, roles</td></tr>
+        <tr><td><code>DECIMAL(p, s)</code></td><td>Números exactos con p dígitos en total y s decimales</td><td>Precios <code>DECIMAL(10, 2)</code> y cantidades <code>DECIMAL(10, 3)</code></td></tr>
+        <tr><td><code>DATETIME</code></td><td>Fecha y hora</td><td>Momento de cada venta</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Tipos de datos del esquema.</figcaption>
+  </div>
+  <p>
+    Para dinero y pesos se usa <code>DECIMAL</code>, nunca <code>FLOAT</code> ni <code>DOUBLE</code>. Los tipos de
+    punto flotante guardan aproximaciones binarias, y por eso <code>0.1 + 0.2</code> no da exactamente
+    <code>0.3</code>. Es el mismo motivo por el que el precio viaja como texto en el JSON (módulo 01).
+  </p>
+
+  <h3>2.3 Claves</h3>
+  <p>
+    La <strong>clave primaria</strong>, o PK (<em>Primary Key</em> o Clave Primaria), es la columna (o el conjunto de
+    columnas) que identifica a cada fila sin repetirse. Se usan claves <strong>subrogadas</strong>: un número sin
+    significado que asigna la base con <code>AUTO_INCREMENT</code>. Si se usara el nombre del producto como clave y
+    el producto cambiara de nombre, habría que actualizar todas las ventas que lo mencionan.
+  </p>
+  <p>
+    La <strong>clave foránea</strong>, o FK (<em>Foreign Key</em> o Clave Foránea), es una columna que guarda la clave
+    primaria de otra tabla. <code>venta.usuario_id</code> apunta a <code>usuario.id</code>. La base garantiza la
+    <strong>integridad referencial</strong>: no se puede guardar una venta de un usuario que no existe, ni borrar un
+    usuario que tiene ventas.
+  </p>
+
+  <h3>2.4 Relaciones</h3>
+  <p>
+    Entre dos tablas puede haber una relación <strong>uno a muchos</strong> (1:N): un usuario hace muchas ventas, y
+    cada venta la hace un solo usuario. Se representa con una FK del lado de «muchos». Entre ventas y productos hay
+    una relación <strong>muchos a muchos</strong> (N:M): una venta tiene varios productos y un producto aparece en
+    varias ventas. Esa relación no se puede guardar con una sola FK, y se resuelve con una
+    <strong>tabla intermedia</strong>, <code>venta_detalle</code>, donde cada fila es una línea de una venta
+    (<strong>Figura 1</strong>).
+  </p>
+
+  <figure>
+    <div class="escena">
+      <svg class="diagrama" viewBox="0 0 960 200" role="img" aria-label="Diagrama entidad-relación con usuario, venta, venta_detalle y producto">
+        <g class="nodo"><rect x="10" y="20" width="190" height="160" rx="10"/>
+          <text class="titulo-nodo" x="105" y="48" text-anchor="middle">usuario</text>
+          <text class="sub" x="24" y="78">id  PK</text><text class="sub" x="24" y="100">nombre</text>
+          <text class="sub" x="24" y="122">telefono</text><text class="sub" x="24" y="144">rol</text></g>
+        <g class="nodo"><rect x="255" y="20" width="190" height="160" rx="10"/>
+          <text class="titulo-nodo" x="350" y="48" text-anchor="middle">venta</text>
+          <text class="sub" x="269" y="78">id  PK</text><text class="sub" x="269" y="100">fecha</text>
+          <text class="sub" x="269" y="122">usuario_id  FK</text><text class="sub" x="269" y="144">total</text></g>
+        <g class="nodo"><rect x="500" y="20" width="210" height="160" rx="10"/>
+          <text class="titulo-nodo" x="605" y="48" text-anchor="middle">venta_detalle</text>
+          <text class="sub" x="514" y="78">venta_id  PK FK</text><text class="sub" x="514" y="100">producto_id  PK FK</text>
+          <text class="sub" x="514" y="122">cantidad</text><text class="sub" x="514" y="144">precio_unitario</text></g>
+        <g class="nodo"><rect x="765" y="20" width="185" height="160" rx="10"/>
+          <text class="titulo-nodo" x="857" y="48" text-anchor="middle">producto</text>
+          <text class="sub" x="779" y="78">id  PK</text><text class="sub" x="779" y="100">nombre</text>
+          <text class="sub" x="779" y="122">unidad</text><text class="sub" x="779" y="144">precio</text>
+          <text class="sub" x="779" y="166">stock</text></g>
+        <line class="linea" x1="200" y1="100" x2="255" y2="100"/>
+        <line class="linea" x1="445" y1="100" x2="500" y2="100"/>
+        <line class="linea" x1="710" y1="100" x2="765" y2="100"/>
+        <text class="etiqueta-zona" x="207" y="92">1</text><text class="etiqueta-zona" x="243" y="92">N</text>
+        <text class="etiqueta-zona" x="452" y="92">1</text><text class="etiqueta-zona" x="488" y="92">N</text>
+        <text class="etiqueta-zona" x="716" y="92">N</text><text class="etiqueta-zona" x="754" y="92">1</text>
+      </svg>
+    </div>
+    <figcaption>Figura 1. Diagrama entidad-relación del esquema final. Cada línea es una relación 1:N; venta_detalle convierte la relación N:M entre venta y producto en dos relaciones 1:N.</figcaption>
+  </figure>
+
+  <h3>2.5 Restricciones: la base como última defensa</h3>
+  <p>
+    Además de los tipos y las claves, cada columna puede tener restricciones. <code>NOT NULL</code> exige un valor,
+    <code>UNIQUE</code> impide repetidos, <code>CHECK</code> exige una condición (por ejemplo,
+    <code>precio &gt; 0</code>) y <code>DEFAULT</code> pone un valor si no se indica ninguno. En las FK,
+    <code>ON DELETE</code> define qué pasa al borrar la fila apuntada: <code>CASCADE</code> borra también las filas
+    que apuntan a ella y <code>RESTRICT</code> impide el borrado.
+  </p>
+  <p>
+    Estas reglas se repiten a propósito con las del backend. En el ejercicio 2 del módulo 03, el service aceptaba el
+    mismo producto dos veces en una venta y dejaba el stock negativo. Con este esquema, la base rechaza las dos
+    cosas: la PK compuesta <code>(venta_id, producto_id)</code> impide la línea repetida y el <code>CHECK</code> del
+    stock impide el negativo. Un error del backend no puede dejar datos inválidos guardados.
+  </p>
+
+  <h3>2.6 Normalización</h3>
+  <p>
+    Normalizar es repartir los datos en tablas de modo que <strong>cada dato se guarde en un solo lugar</strong>.
+    Cuando un dato se repite en muchas filas, aparecen tres <strong>anomalías</strong>. La anomalía de modificación
+    ocurre cuando Bruno cambia de teléfono y hay que corregirlo en cada venta que cobró; si se olvida una, la planilla
+    tiene dos teléfonos para la misma persona. La anomalía de inserción impide cargar un producto nuevo hasta que se
+    venda por primera vez, porque la planilla solo tiene filas de ventas. La anomalía de borrado hace que, al borrar
+    la única venta de yogur, se pierda también su precio.
+  </p>
+  <p>
+    Las <strong>formas normales</strong> son reglas sucesivas que eliminan esas anomalías (<strong>Tabla 3</strong>).
+    Para cada regla importa la noción de <strong>dependencia</strong>: un dato depende de otro si, sabiendo el
+    segundo, el primero queda determinado. Sabiendo el número de venta se sabe la fecha; sabiendo la cajera se sabe
+    su teléfono.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Forma normal</th><th>Regla</th><th>Violación en la planilla</th><th>Solución</th></tr></thead>
+      <tbody>
+        <tr><td>Primera (1FN)</td><td>Cada celda guarda un solo valor, sin listas.</td><td>La columna <code>productos</code> tiene varios productos en una celda.</td><td>Una fila por cada producto de cada venta.</td></tr>
+        <tr><td>Segunda (2FN)</td><td>Cumple 1FN, y si la clave tiene varias columnas, ningún dato depende solo de una parte de ella.</td><td>Con clave (venta, producto), la fecha depende solo de la venta y la unidad solo del producto.</td><td>Separar venta, producto y la línea de cada venta.</td></tr>
+        <tr><td>Tercera (3FN)</td><td>Cumple 2FN, y ningún dato depende de otro dato que no sea la clave.</td><td>En la tabla de ventas, el teléfono depende de la cajera, no de la venta.</td><td>Separar los usuarios en su propia tabla.</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 3. Las tres primeras formas normales aplicadas a la planilla de ventas.</figcaption>
+  </div>
+  <p>
+    Normalizar no significa eliminar toda repetición. Dos columnas del esquema final parecen redundantes y no lo son,
+    o lo son a propósito. <code>venta_detalle.precio_unitario</code> no repite <code>producto.precio</code>: guarda el
+    precio <em>al momento de vender</em>. Si mañana el queso aumenta, las ventas de ayer conservan su precio. En
+    cambio, <code>venta.total</code> sí se podría calcular sumando las líneas. Se guarda igual por dos motivos: los
+    reportes no tienen que recalcular cada venta y el total cobrado queda registrado tal como se le informó al
+    cliente. Esa <strong>desnormalización consciente</strong> obliga a mantener el total y las líneas coherentes en
+    la misma operación, y la consulta 6 de <code>03_consultas.sql</code> verifica que lo estén.
+  </p>
+
+  <h3>2.7 Índices</h3>
+  <p>
+    Un índice es una estructura adicional que permite encontrar filas sin recorrer toda la tabla, como el índice de un
+    libro. MariaDB crea uno para cada PK y cada FK. El esquema agrega <code>idx_venta_fecha</code> porque los
+    resúmenes del día, la semana y el mes filtran por fecha. Cada índice acelera las búsquedas y hace un poco más
+    lentas las escrituras, así que se crean solo para consultas frecuentes.
+  </p>
+
+  <h3>2.8 SQL: definir y manipular</h3>
+  <p>
+    SQL tiene dos grupos de órdenes. El DDL (<em>Data Definition Language</em> o Lenguaje de Definición de Datos)
+    define la estructura con <code>CREATE</code>, <code>ALTER</code> y <code>DROP</code>. El DML (<em>Data
+    Manipulation Language</em> o Lenguaje de Manipulación de Datos) trabaja con las filas mediante
+    <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code> y <code>DELETE</code>. <code>JOIN</code> combina
+    filas de dos tablas a través de una FK, y <code>GROUP BY</code> agrupa filas para calcular sumas o cantidades.
+  </p>
+
+  <h3>2.9 MariaDB en un contenedor</h3>
+  <p>
+    Una <strong>imagen</strong> de Docker es un paquete con un programa y todo lo que necesita para ejecutarse
+    (<code>mariadb:11.4</code>). Un <strong>contenedor</strong> es una instancia en ejecución de esa imagen. Se usa
+    un contenedor para no instalar MariaDB en Windows: se crea con un comando y se borra sin dejar rastro. Los datos
+    se guardan en un <strong>volumen</strong> (<code>pl-datos</code>), una carpeta administrada por Docker que
+    sobrevive aunque se borre el contenedor. El módulo 10 retoma estos conceptos con Docker Compose.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>La tabla intermedia muestra casi todos los conceptos juntos: tipos, PK compuesta, <code>CHECK</code> y dos FK con políticas distintas.</p>
+  <pre><code>CREATE TABLE venta_detalle (
+    venta_id         INT            NOT NULL,
+    producto_id      INT            NOT NULL,
+    cantidad         DECIMAL(10, 3) NOT NULL,
+    precio_unitario  DECIMAL(10, 2) NOT NULL,  -- el precio al momento de vender (historial)
+    PRIMARY KEY (venta_id, producto_id),        -- un producto aparece una sola vez por venta
+    CONSTRAINT ck_detalle_cantidad CHECK (cantidad &gt; 0),
+    CONSTRAINT fk_detalle_venta    FOREIGN KEY (venta_id)    REFERENCES venta (id) ON DELETE CASCADE,
+    CONSTRAINT fk_detalle_producto FOREIGN KEY (producto_id) REFERENCES producto (id) ON DELETE RESTRICT
+);</code></pre>
+
+  <p>Una consulta con <code>JOIN</code> y <code>GROUP BY</code> responde «¿cuánto se vendió de cada producto?»:</p>
+  <pre><code>SELECT p.nombre, SUM(d.cantidad) AS cantidad_vendida, p.unidad,
+       SUM(ROUND(d.cantidad * d.precio_unitario, 2)) AS recaudado
+FROM venta_detalle AS d
+JOIN producto AS p ON p.id = d.producto_id
+GROUP BY p.id, p.nombre, p.unidad
+ORDER BY recaudado DESC;</code></pre>
+
+  <p>El contenedor se crea una vez y cada script se ejecuta con el cliente que trae adentro. El <code>README.md</code> de la etapa explica cada parte del comando:</p>
+  <pre><code>docker run -d --name pl-mariadb -e MARIADB_ROOT_PASSWORD=raiz123 -e MARIADB_DATABASE=punto_lacteo -e MARIADB_USER=pl -e MARIADB_PASSWORD=pl123 -p 3307:3306 -v pl-datos:/var/lib/mysql -v "${PWD}\sql:/sql:ro" mariadb:11.4
+
+docker exec pl-mariadb mariadb -u pl -ppl123 --default-character-set=utf8mb4 punto_lacteo -e "source /sql/01_esquema.sql"</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    Cada tabla tiene su equivalente en los schemas de la etapa 03, y el módulo 05 reemplaza los repositorios en
+    memoria por repositorios que leen y escriben estas tablas (<strong>Tabla 4</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Tabla</th><th>Schema de la etapa 03</th><th>Qué cambia en el módulo 05</th></tr></thead>
+      <tbody>
+        <tr><td><code>producto</code></td><td><code>ProductoOut</code></td><td>El repositorio hace <code>SELECT</code> y <code>UPDATE</code> en lugar de usar un diccionario.</td></tr>
+        <tr><td><code>venta</code> + <code>venta_detalle</code></td><td><code>VentaOut</code> con su lista de <code>ItemVentaOut</code></td><td>Una venta se guarda como una fila de cabecera y varias de detalle, en una transacción.</td></tr>
+        <tr><td><code>usuario</code></td><td>No existe todavía</td><td>La venta exige un <code>usuario_id</code>. En el módulo 06 sale del usuario que inició sesión.</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 4. Correspondencia entre las tablas y los schemas de la API.</figcaption>
+  </div>
+  <div class="nota">
+    <p><strong>Para el proyecto real.</strong> Este esquema guarda el stock como una columna que se suma y se resta.
+    En el sistema real conviene registrar cada movimiento (ingreso, venta, ajuste, merma) en una tabla propia que no
+    se modifica nunca, y calcular el stock a partir de ella. Con los lotes y los vencimientos pasa lo mismo: cada
+    ingreso de mercadería sería una fila de una tabla <code>lote</code>. Este módulo usa la versión simple para
+    aprender los conceptos.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: normalizar la planilla paso a paso</h2>
+  <p>
+    El recorrido parte de la planilla de la Tabla 1 y la lleva hasta el esquema final. Las celdas en rojo marcan el
+    problema de cada paso; las etiquetas PK y FK marcan las claves primarias y foráneas.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escena">
+      <div class="tablas-animadas" id="tablas"></div>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Guardar dinero en <code>FLOAT</code>.</strong></p>
+    <p>Los centavos se desvían de a poco y los totales dejan de coincidir. Para precios, cantidades y totales se usa <code>DECIMAL</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Guardar listas en una celda.</strong></p>
+    <p>Una columna con «queso; leche» no se puede filtrar, sumar ni vincular con otra tabla. Es la violación de la primera forma normal, y se resuelve con una tabla intermedia.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Usar <code>ON DELETE CASCADE</code> en todas las FK.</strong></p>
+    <p>Si <code>fk_detalle_producto</code> tuviera <code>CASCADE</code>, borrar un producto borraría las líneas de todas las ventas donde aparece, y el historial quedaría incompleto. <code>CASCADE</code> va donde la fila hija no tiene sentido sin la madre, como las líneas de una venta.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Olvidar el juego de caracteres.</strong></p>
+    <p>Sin <code>utf8mb4</code> en la base y en la conexión, «Salame milán» puede guardarse o mostrarse como «Salame mil?n». Por eso el esquema empieza con <code>ALTER DATABASE ... utf8mb4</code> y los comandos usan <code>--default-character-set=utf8mb4</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Escribir <code>&lt; archivo.sql</code> en PowerShell.</strong></p>
+    <p>PowerShell no admite ese operador y responde con un error de sintaxis. La etapa monta la carpeta <code>sql</code> en el contenedor y usa <code>source</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Publicar el contenedor en un puerto ocupado.</strong></p>
+    <p>Si otro MariaDB ya usa el 3306, Docker responde «port is already allocated». La etapa publica en el 3307 para convivir con el MariaDB de la materia IoT.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Escribí la consulta «productos que nunca se vendieron». Pista: <code>LEFT JOIN</code> entre <code>producto</code> y <code>venta_detalle</code>.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>SELECT p.nombre
+FROM producto AS p
+LEFT JOIN venta_detalle AS d ON d.producto_id = p.id
+WHERE d.producto_id IS NULL;</code></pre>
+      <p>Con los datos de prueba devuelve «Queso rallado 150 g». <code>LEFT JOIN</code> conserva todos los productos aunque no tengan líneas; los que no tienen quedan con las columnas de <code>d</code> en <code>NULL</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Las compras a proveedores se anotan así: <code>compra(nro_compra, fecha, proveedor, cuit_proveedor, producto, cantidad, costo_unitario)</code>, con clave <code>(nro_compra, producto)</code>. ¿Qué formas normales viola y cómo quedaría?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Viola la 2FN: <code>fecha</code> y <code>proveedor</code> dependen solo de <code>nro_compra</code>. Viola la 3FN: <code>cuit_proveedor</code> depende del proveedor, no de la compra. Queda <code>proveedor(id, nombre, cuit)</code>, <code>compra(id, fecha, proveedor_id)</code> y <code>compra_detalle(compra_id, producto_id, cantidad, costo_unitario)</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> ¿Por qué <code>fk_detalle_venta</code> usa <code>ON DELETE CASCADE</code> y <code>fk_detalle_producto</code> usa <code>RESTRICT</code>? Probá borrar la venta 2 y después el producto 3.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Una línea de venta no tiene sentido sin su venta, así que al borrar la venta se borran sus líneas. Un producto, en cambio, es parte del historial de ventas: borrarlo dejaría ventas incompletas, y por eso se impide mientras tenga líneas. Después de borrar la venta 2, el producto 3 ya no tiene líneas y sí se puede borrar.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Ejecutá <code>04_restricciones.sql</code> y relacioná cada error con la línea de <code>01_esquema.sql</code> que lo provoca. ¿Cuál de esos errores habría evitado el bug del ejercicio 2 del módulo 03?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El de la PK compuesta (<code>Duplicate entry '1-1' for key 'PRIMARY'</code>), que impide repetir un producto en una venta, y el del <code>CHECK</code> del stock, que impide que quede negativo.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>5.</strong> Diseñá cómo guardar los vencimientos: cada ingreso de mercadería trae una cantidad y una fecha de vencimiento. ¿Qué tabla agregarías y cómo se relaciona con <code>producto</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Una tabla <code>lote(id, producto_id, fecha_ingreso, vencimiento, cantidad_inicial, cantidad_disponible, costo_unitario)</code>, con una relación 1:N desde <code>producto</code>. El stock de un producto pasa a ser la suma de <code>cantidad_disponible</code> de sus lotes, y cada venta descuenta primero del lote que vence antes.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://mariadb.com/docs/">MariaDB: documentación oficial (en inglés). Las páginas de referencia de este módulo son CREATE TABLE, DECIMAL, CHECK constraints y JOIN Syntax, y se encuentran con el buscador del sitio.</a></li>
+    <li><a href="https://hub.docker.com/_/mariadb">Docker Hub: imagen oficial de MariaDB y sus variables de entorno (en inglés)</a></li>
+    <li><a href="https://es.wikipedia.org/wiki/Normalizaci%C3%B3n_de_bases_de_datos">Normalización de bases de datos (referencia general)</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="03_fastapi_estructurado.html">← Anterior: Módulo 03</a> ·
+    <a href="05_backend_base.html">Siguiente: Módulo 05, backend ↔ base de datos →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // ---------- Datos de cada versión de las tablas ----------
+  const PLANILLA = {
+    nombre: "planilla",
+    columnas: ["nro_venta", "fecha", "cajera", "telefono_cajera", "productos", "total"],
+    filas: [
+      ["1", "2026-11-02 09:15", "Bruno", "555-0102", "Queso cremoso 0,350 kg x $12500; Leche entera 1 L 2 u x $1450", "7275.00"],
+      ["2", "2026-11-02 10:40", "Carla", "555-0103", "Salame milán 0,200 kg x $18900", "3780.00"],
+      ["3", "2026-11-02 11:05", "Bruno", "555-0102", "Leche entera 1 L 1 u x $1450; Yogur bebible 1 L 1 u x $2300", "3750.00"],
+    ],
+  };
+
+  const PRIMERA = {
+    nombre: "ventas (1FN)",
+    columnas: ["nro_venta", "fecha", "cajera", "telefono_cajera", "producto", "unidad", "cantidad", "precio_unitario"],
+    marcas: { nro_venta: "PK", producto: "PK" },
+    filas: [
+      ["1", "2026-11-02 09:15", "Bruno", "555-0102", "Queso cremoso", "kg", "0,350", "12500"],
+      ["1", "2026-11-02 09:15", "Bruno", "555-0102", "Leche entera 1 L", "unidad", "2", "1450"],
+      ["2", "2026-11-02 10:40", "Carla", "555-0103", "Salame milán", "kg", "0,200", "18900"],
+      ["3", "2026-11-02 11:05", "Bruno", "555-0102", "Leche entera 1 L", "unidad", "1", "1450"],
+      ["3", "2026-11-02 11:05", "Bruno", "555-0102", "Yogur bebible 1 L", "unidad", "1", "2300"],
+    ],
+  };
+
+  const VENTA_2FN = {
+    nombre: "venta",
+    columnas: ["nro_venta", "fecha", "cajera", "telefono_cajera"],
+    marcas: { nro_venta: "PK" },
+    filas: [
+      ["1", "2026-11-02 09:15", "Bruno", "555-0102"],
+      ["2", "2026-11-02 10:40", "Carla", "555-0103"],
+      ["3", "2026-11-02 11:05", "Bruno", "555-0102"],
+    ],
+  };
+
+  const PRODUCTO_NOMBRE = {
+    nombre: "producto",
+    columnas: ["nombre", "unidad", "precio"],
+    marcas: { nombre: "PK" },
+    filas: [
+      ["Queso cremoso", "kg", "12500"],
+      ["Leche entera 1 L", "unidad", "1450"],
+      ["Salame milán", "kg", "18900"],
+      ["Yogur bebible 1 L", "unidad", "2300"],
+    ],
+  };
+
+  const DETALLE_NOMBRE = {
+    nombre: "venta_detalle",
+    columnas: ["nro_venta", "producto", "cantidad", "precio_unitario"],
+    marcas: { nro_venta: "PK FK", producto: "PK FK" },
+    filas: [
+      ["1", "Queso cremoso", "0,350", "12500"],
+      ["1", "Leche entera 1 L", "2", "1450"],
+      ["2", "Salame milán", "0,200", "18900"],
+      ["3", "Leche entera 1 L", "1", "1450"],
+      ["3", "Yogur bebible 1 L", "1", "2300"],
+    ],
+  };
+
+  const USUARIO_3FN = {
+    nombre: "usuario",
+    columnas: ["nombre", "telefono"],
+    marcas: { nombre: "PK" },
+    filas: [["Bruno", "555-0102"], ["Carla", "555-0103"]],
+  };
+
+  const VENTA_3FN = {
+    nombre: "venta",
+    columnas: ["nro_venta", "fecha", "cajera"],
+    marcas: { nro_venta: "PK", cajera: "FK" },
+    filas: [["1", "2026-11-02 09:15", "Bruno"], ["2", "2026-11-02 10:40", "Carla"], ["3", "2026-11-02 11:05", "Bruno"]],
+  };
+
+  const FINAL = [
+    {
+      nombre: "usuario",
+      columnas: ["id", "nombre", "telefono", "rol"],
+      marcas: { id: "PK" },
+      filas: [["1", "Ana", "555-0101", "duenio"], ["2", "Bruno", "555-0102", "empleado"], ["3", "Carla", "555-0103", "empleado"]],
+    },
+    {
+      nombre: "venta",
+      columnas: ["id", "fecha", "usuario_id", "total"],
+      marcas: { id: "PK", usuario_id: "FK" },
+      filas: [["1", "2026-11-02 09:15", "2", "7275.00"], ["2", "2026-11-02 10:40", "3", "3780.00"], ["3", "2026-11-02 11:05", "2", "3750.00"]],
+    },
+    {
+      nombre: "producto",
+      columnas: ["id", "nombre", "unidad", "precio", "stock"],
+      marcas: { id: "PK" },
+      filas: [["1", "Queso cremoso", "kg", "12500.00", "1.750"], ["2", "Leche entera 1 L", "unidad", "1450.00", "21"], ["3", "Salame milán", "kg", "18900.00", "1.300"], ["4", "Yogur bebible 1 L", "unidad", "2300.00", "5"], ["5", "Queso rallado 150 g", "unidad", "3100.00", "0"]],
+    },
+    {
+      nombre: "venta_detalle",
+      columnas: ["venta_id", "producto_id", "cantidad", "precio_unitario"],
+      marcas: { venta_id: "PK FK", producto_id: "PK FK" },
+      filas: [["1", "1", "0.350", "12500.00"], ["1", "2", "2", "1450.00"], ["2", "3", "0.200", "18900.00"], ["3", "2", "1", "1450.00"], ["3", "4", "1", "2300.00"]],
+    },
+  ];
+
+  // ---------- Pasos ----------
+  // marcar: { problema: [[tabla, fila, columna], ...] } con fila = -1 para toda la columna.
+  const PASOS = [
+    {
+      titulo: "La planilla original",
+      texto: "<p>Cada fila es una venta. La columna <code>productos</code> mete varios productos en una sola celda, con su cantidad y su precio escritos como texto. Para saber cuánta leche se vendió habría que leer y separar ese texto en cada fila: la base no puede sumar ni filtrar lo que está adentro de una celda.</p><p>Esto viola la <strong>primera forma normal</strong>: cada celda debe guardar un solo valor.</p>",
+      tablas: [PLANILLA],
+      problemas: [[0, -1, "productos"]],
+    },
+    {
+      titulo: "Las tres anomalías",
+      texto: "<p><strong>Modificación:</strong> el teléfono de Bruno aparece en dos filas; si cambia, hay que corregirlo en todas. <strong>Inserción:</strong> el queso rallado no se puede cargar hasta venderlo, porque no hay dónde anotar un producto sin venta. <strong>Borrado:</strong> si se borra la venta 3, se pierde el único registro del precio del yogur.</p>",
+      tablas: [PLANILLA],
+      problemas: [[0, 0, "telefono_cajera"], [0, 2, "telefono_cajera"], [0, 2, "productos"]],
+    },
+    {
+      titulo: "Primera forma normal: un valor por celda",
+      texto: "<p>Se separa cada producto de cada venta en su propia fila. Ahora todas las celdas tienen un solo valor, y la cantidad y el precio son columnas que se pueden sumar. La clave primaria es compuesta: <code>(nro_venta, producto)</code>, porque ninguna de las dos columnas identifica una fila por sí sola.</p><p>El total desaparece por ahora: se puede calcular sumando las líneas, y vuelve al final como decisión consciente.</p>",
+      tablas: [PRIMERA],
+      problemas: [],
+    },
+    {
+      titulo: "Segunda forma normal: dependencias parciales",
+      texto: "<p>La tabla cumple 1FN, pero repite datos. <code>fecha</code>, <code>cajera</code> y <code>telefono_cajera</code> dependen solo de <code>nro_venta</code>, que es <em>una parte</em> de la clave. <code>unidad</code> depende solo de <code>producto</code>, la otra parte. Esas son <strong>dependencias parciales</strong>, y la 2FN las prohíbe.</p><p><code>cantidad</code> y <code>precio_unitario</code> sí dependen de la clave completa: hacen falta la venta y el producto para saberlos.</p>",
+      tablas: [PRIMERA],
+      problemas: [[0, -1, "fecha"], [0, -1, "cajera"], [0, -1, "telefono_cajera"], [0, -1, "unidad"]],
+    },
+    {
+      titulo: "Se separan venta, producto y detalle",
+      texto: "<p>Cada grupo de datos se va a la tabla de lo que lo determina. Lo que depende de la venta va a <code>venta</code>; lo que depende del producto, a <code>producto</code>, que además gana el precio de lista y puede tener productos sin ventas; lo que depende de los dos queda en <code>venta_detalle</code>.</p><p>La fecha y la cajera aparecen una vez por venta, no una vez por línea. Ya se puede cargar un producto sin venderlo: la anomalía de inserción desapareció.</p>",
+      tablas: [VENTA_2FN, PRODUCTO_NOMBRE, DETALLE_NOMBRE],
+      problemas: [],
+    },
+    {
+      titulo: "Tercera forma normal: dependencias transitivas",
+      texto: "<p>En <code>venta</code> queda un problema. <code>telefono_cajera</code> no depende de la venta: depende de la cajera, que a su vez depende de la venta. Esa cadena se llama <strong>dependencia transitiva</strong>, y la 3FN la prohíbe. Por eso el teléfono de Bruno sigue repetido en las ventas 1 y 3.</p>",
+      tablas: [VENTA_2FN, PRODUCTO_NOMBRE, DETALLE_NOMBRE],
+      problemas: [[0, 0, "telefono_cajera"], [0, 2, "telefono_cajera"]],
+    },
+    {
+      titulo: "Se separan los usuarios",
+      texto: "<p>Las personas pasan a su propia tabla, y la venta solo guarda quién la cobró. Si Bruno cambia de teléfono, se corrige una sola fila. Las cuatro tablas están en 3FN: cada dato depende de la clave, de toda la clave y de nada más que la clave.</p>",
+      tablas: [USUARIO_3FN, VENTA_3FN, PRODUCTO_NOMBRE, DETALLE_NOMBRE],
+      problemas: [],
+      bien: [[0, -1, "telefono"]],
+    },
+    {
+      titulo: "El esquema final de 01_esquema.sql",
+      texto: "<p>Se reemplazan los nombres por <strong>claves subrogadas</strong> (<code>id</code> numéricos): si un producto cambia de nombre, ninguna venta se modifica. Se agregan el rol, el stock y un producto sin ventas (el queso rallado).</p><p>Vuelve <code>venta.total</code> como <strong>desnormalización consciente</strong>, y <code>precio_unitario</code> conserva el precio de cada venta aunque cambie el de lista.</p>",
+      tablas: FINAL,
+      problemas: [],
+      bien: [[1, -1, "total"], [3, -1, "precio_unitario"]],
+    },
+  ];
+
+  // ---------- Dibujo ----------
+  const contenedor = document.getElementById("tablas");
+
+  function dibujarPaso(paso) {
+    contenedor.replaceChildren();
+    paso.tablas.forEach((tabla, indiceTabla) => {
+      const envoltura = document.createElement("div");
+      envoltura.className = "tabla";
+      const elemento = document.createElement("table");
+      elemento.className = "tabla-animada";
+      const titulo = elemento.createCaption();
+      titulo.textContent = tabla.nombre;
+
+      const encabezado = elemento.createTHead().insertRow();
+      tabla.columnas.forEach((columna) => {
+        const th = document.createElement("th");
+        th.textContent = columna;
+        const marca = (tabla.marcas || {})[columna];
+        if (marca) th.dataset.marca = marca;
+        encabezado.append(th);
+      });
+
+      const cuerpo = elemento.createTBody();
+      tabla.filas.forEach((fila, indiceFila) => {
+        const tr = cuerpo.insertRow();
+        fila.forEach((valor, indiceColumna) => {
+          const td = tr.insertCell();
+          td.textContent = valor;
+          const columna = tabla.columnas[indiceColumna];
+          const coincide = ([t, f, c]) => t === indiceTabla && c === columna && (f === -1 || f === indiceFila);
+          if (paso.problemas.some(coincide)) td.classList.add("problema");
+          if ((paso.bien || []).some(coincide)) td.classList.add("bien");
+        });
+      });
+
+      envoltura.append(elemento);
+      contenedor.append(envoltura);
+    });
+  }
+
+  crearRecorrido(document.getElementById("recorrido"), PASOS, dibujarPaso);
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+nro_venta,fecha,cajera,telefono_cajera,productos,total
+1,2026-11-02 09:15,Bruno,555-0102,"Queso cremoso 0,350 kg x $12500; Leche entera 1 L 2 u x $1450",7275.00
+2,2026-11-02 10:40,Carla,555-0103,"Salame milán 0,200 kg x $18900",3780.00
+3,2026-11-02 11:05,Bruno,555-0102,"Leche entera 1 L 1 u x $1450; Yogur bebible 1 L 1 u x $2300",3750.00

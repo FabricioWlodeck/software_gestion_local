@@ -444,11 +444,19 @@ details[open] summary { margin-bottom: 6px; }
 /* ---------- Tablas animadas (módulo 04) ---------- */
 
 .tabla-animada td.problema { background: var(--error-suave); color: var(--error); font-weight: 600; }
-.tabla-animada td.clave { font-weight: 700; }
-.tabla-animada td.clave::after { content: " 🔑"; font-size: 0.8em; }
-.tabla-animada td.foranea::after { content: " ↗"; color: var(--acento); }
+.tabla-animada td.bien { background: var(--ok-suave); }
+.tabla-animada th[data-marca]::after {
+  content: attr(data-marca);
+  margin-left: 6px;
+  font-size: 0.72em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--acento-suave);
+  color: var(--acento);
+}
 .tabla-animada caption { text-align: left; font-weight: 700; padding: 4px 0; }
-.tablas-animadas { display: grid; gap: 12px; }
+.tablas-animadas { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.tablas-animadas .tabla { margin: 0; }
 
 /* ---------- Mensajes HTTP (módulo 01) ---------- */
 
