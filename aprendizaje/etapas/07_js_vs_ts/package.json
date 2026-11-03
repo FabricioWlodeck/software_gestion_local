@@ -1,0 +1,15 @@
+{
+  "name": "etapa-07-js-vs-ts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fundamentos": "node 01_fundamentos.js",
+    "carrito-js": "node 02_carrito.js",
+    "carrito-ts": "node 03_carrito_con_errores.ts",
+    "corregido": "node 04_carrito_corregido.ts",
+    "verificar": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

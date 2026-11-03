@@ -1,0 +1,12 @@
+{
+  // Configuración de TypeScript. Solo se usa para verificar tipos: Node ejecuta los .ts directamente.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "lib": ["es2022", "dom"],
+    "strict": true,
+    "noEmit": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["*.ts"]
+}

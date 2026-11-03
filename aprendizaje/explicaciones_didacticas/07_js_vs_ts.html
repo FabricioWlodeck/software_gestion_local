@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JavaScript vs TypeScript</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 07</span><span>75 min</span><span>Código: <code>aprendizaje/etapas/07_js_vs_ts</code></span></p>
+    <h1>JavaScript vs TypeScript: el mismo error, antes o después</h1>
+    <p>El JavaScript mínimo para usar React, qué agrega TypeScript, cuánto cuesta y por qué el proyecto lo usa.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    El navegador solo ejecuta JavaScript, así que el frontend de Punto Lácteo se escribe en JavaScript o en algo que
+    se convierta en JavaScript. Para alguien que viene de Python hay dos dificultades. La primera es la sintaxis, que
+    cambia en detalles todo el tiempo. La segunda es más seria: JavaScript deja pasar errores que Python habría
+    frenado. Suma un texto y un número sin quejarse, devuelve <code>undefined</code> al leer una propiedad mal escrita
+    y recién falla cuando la cajera toca el botón que ejecuta esa línea.
+  </p>
+  <p>
+    Además, el contrato de la API (los campos de <code>ProductoOut</code>, el tipo de cada uno) está escrito en
+    Python, y el frontend no tiene forma de saberlo. TypeScript agrega tipos a JavaScript y los verifica
+    <strong>antes</strong> de ejecutar. Este módulo muestra el mismo carrito con los mismos tres errores en los dos
+    lenguajes.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 JavaScript dentro y fuera del navegador</h3>
+  <p>
+    JavaScript es el único lenguaje que los navegadores ejecutan de forma nativa. Node.js es un programa que ejecuta
+    JavaScript fuera del navegador, en la terminal. La etapa 07 usa Node para probar el lenguaje sin pantallas, y los
+    módulos 08 y 09 lo usan para las herramientas de desarrollo (Vite, npm). El código del frontend, en cambio, corre
+    en el navegador de la cajera.
+  </p>
+
+  <h3>2.2 JavaScript moderno desde Python</h3>
+  <p>La <strong>Tabla 1</strong> reúne las equivalencias que más aparecen en React. Todas están en <code>01_fundamentos.js</code>.</p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Idea</th><th>Python</th><th>JavaScript</th></tr></thead>
+      <tbody>
+        <tr><td>Variable</td><td><code>total = 0</code></td><td><code>let total = 0;</code> (cambia) · <code>const local = "PL";</code> (no cambia)</td></tr>
+        <tr><td>Texto con valores</td><td><code>f"Total: {total}"</code></td><td><code>`Total: ${total}`</code> (con comillas invertidas)</td></tr>
+        <tr><td>Diccionario / objeto</td><td><code>{"id": 1, "nombre": "Queso"}</code></td><td><code>{ id: 1, nombre: "Queso" }</code></td></tr>
+        <tr><td>Lista / arreglo</td><td><code>[1, 2, 3]</code></td><td><code>[1, 2, 3]</code></td></tr>
+        <tr><td>Función</td><td><code>def doble(x): return x * 2</code></td><td><code>const doble = (x) =&gt; x * 2;</code></td></tr>
+        <tr><td>Transformar una lista</td><td><code>[p["nombre"] for p in productos]</code></td><td><code>productos.map((p) =&gt; p.nombre)</code></td></tr>
+        <tr><td>Filtrar</td><td><code>[p for p in productos if p["stock"] &gt; 0]</code></td><td><code>productos.filter((p) =&gt; p.stock &gt; 0)</code></td></tr>
+        <tr><td>Copiar cambiando un campo</td><td><code>{**p, "precio": 100}</code></td><td><code>{ ...p, precio: 100 }</code></td></tr>
+        <tr><td>Sacar campos</td><td><code>nombre = p["nombre"]</code></td><td><code>const { nombre, precio } = p;</code></td></tr>
+        <tr><td>Ausencia de valor</td><td><code>None</code></td><td><code>null</code> y <code>undefined</code></td></tr>
+        <tr><td>Acceso seguro</td><td><code>p.get("nombre", "—")</code></td><td><code>p?.nombre ?? "—"</code></td></tr>
+        <tr><td>Igualdad</td><td><code>==</code></td><td><code>===</code> (el <code>==</code> de JavaScript convierte tipos: no se usa)</td></tr>
+        <tr><td>Espera asíncrona</td><td><code>await pedir()</code> dentro de <code>async def</code></td><td><code>await pedir()</code> dentro de <code>async function</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Equivalencias entre Python y JavaScript.</figcaption>
+  </div>
+  <p>
+    <code>async</code>/<code>await</code> merece una aclaración. Cuando el frontend le pide algo al backend, la
+    respuesta tarda. <code>await</code> espera esa respuesta sin congelar la pantalla, y el resto del programa sigue
+    corriendo mientras tanto. Por eso, en <code>01_fundamentos.js</code>, la última línea se imprime antes de que
+    lleguen los productos.
+  </p>
+
+  <h3>2.3 Tipado dinámico y conversiones silenciosas</h3>
+  <p>
+    En JavaScript, como en Python, las variables no declaran tipo. La diferencia es qué pasa al mezclar tipos. Python
+    rechaza <code>"2" + 1</code> con un <code>TypeError</code>; JavaScript lo convierte en <code>"21"</code>. Leer una
+    propiedad que no existe no es un error: devuelve <code>undefined</code>, y operar con <code>undefined</code> da
+    <code>NaN</code> (<em>Not a Number</em> o «no es un número»). El programa sigue como si nada, con un resultado
+    incorrecto.
+  </p>
+
+  <h3>2.4 Qué es TypeScript</h3>
+  <p>
+    TypeScript es JavaScript con anotaciones de tipo. Todo JavaScript válido es TypeScript válido; TypeScript solo
+    agrega sintaxis como <code>precio: number</code>. Lo importante es <strong>cuándo</strong> actúa: los tipos se
+    verifican mientras se escribe (el editor subraya los errores) o con el comando <code>tsc</code>, y después
+    <strong>se borran</strong>. Lo que ejecuta el navegador o Node es JavaScript sin tipos. Por eso
+    <code>node 03_carrito_con_errores.ts</code> falla exactamente igual que la versión en JavaScript: los tipos no
+    existen al ejecutar.
+  </p>
+  <p>
+    Vite, que se usa en el módulo 08, también borra los tipos sin verificarlos para que el servidor de desarrollo sea
+    rápido. La verificación la hacen el editor y el comando de compilación (<code>npm run build</code> ejecuta
+    <code>tsc</code> antes de empaquetar).
+  </p>
+
+  <h3>2.5 Los tipos que se usan</h3>
+  <p>
+    Una <code>interface</code> describe la forma de un objeto, igual que un schema de Pydantic. Una
+    <strong>unión</strong> como <code>"kg" | "unidad"</code> limita los valores posibles, como <code>Literal</code>.
+    <code>Producto | undefined</code> declara que un valor puede faltar. Con <code>"strict": true</code> en
+    <code>tsconfig.json</code>, TypeScript obliga a contemplar ese caso antes de usar el valor. En muchos lugares no
+    hace falta anotar: TypeScript <strong>infiere</strong> el tipo. En <code>let total = 0</code> ya sabe que
+    <code>total</code> es un <code>number</code>.
+  </p>
+
+  <h3>2.6 El contrato de la API como tipo</h3>
+  <p>
+    En el frontend, cada schema de salida del backend se escribe como una <code>interface</code>. Así, cuando el
+    código usa <code>producto.precio</code>, el editor sabe que existe y de qué tipo es. La <strong>Tabla 2</strong>
+    muestra cómo se traduce cada tipo de Pydantic al JSON que llega y de ahí a TypeScript.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Pydantic (backend)</th><th>Llega en el JSON como</th><th>TypeScript (frontend)</th></tr></thead>
+      <tbody>
+        <tr><td><code>int</code></td><td>número</td><td><code>number</code></td></tr>
+        <tr><td><code>str</code></td><td>texto</td><td><code>string</code></td></tr>
+        <tr><td><code>Decimal</code></td><td>texto, por ejemplo <code>"12500.00"</code></td><td><code>string</code> (se convierte solo para mostrar o calcular)</td></tr>
+        <tr><td><code>datetime</code></td><td>texto ISO 8601, por ejemplo <code>"2026-11-03T04:00:42"</code></td><td><code>string</code></td></tr>
+        <tr><td><code>Literal["kg", "unidad"]</code></td><td>texto</td><td><code>"kg" | "unidad"</code></td></tr>
+        <tr><td><code>list[ItemVentaOut]</code></td><td>arreglo</td><td><code>ItemVenta[]</code></td></tr>
+        <tr><td><code>str | None</code></td><td>texto o <code>null</code></td><td><code>string | null</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Traducción de los tipos del backend a los del frontend.</figcaption>
+  </div>
+  <p>
+    Escribir estas interfaces a mano implica mantenerlas iguales que los schemas. Como FastAPI publica el contrato en
+    <code>/openapi.json</code>, existen herramientas que generan los tipos de TypeScript automáticamente. Para un
+    proyecto chico, escribirlos a mano alcanza y se entiende mejor.
+  </p>
+
+  <h3>2.7 Ventajas y desventajas</h3>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Aspecto</th><th>JavaScript</th><th>TypeScript</th></tr></thead>
+      <tbody>
+        <tr><td>Cuándo aparecen los errores de tipo</td><td>Al ejecutar esa línea, o nunca (resultados incorrectos)</td><td>Mientras se escribe, antes de ejecutar</td></tr>
+        <tr><td>Cambiar algo sin romper otra cosa</td><td>Hay que buscar a mano cada uso</td><td>Si se renombra un campo, el editor marca cada lugar que hay que actualizar</td></tr>
+        <tr><td>Autocompletado</td><td>Limitado: el editor adivina</td><td>Completo: el editor conoce cada campo y su tipo</td></tr>
+        <tr><td>Documentación del contrato</td><td>En comentarios o en la cabeza de quien lo escribió</td><td>En las interfaces, verificada por el compilador</td></tr>
+        <tr><td>Configuración</td><td>Ninguna</td><td>Un <code>tsconfig.json</code> y el compilador (Vite lo trae configurado)</td></tr>
+        <tr><td>Curva de aprendizaje</td><td>Solo el lenguaje</td><td>El lenguaje más el sistema de tipos y sus mensajes de error</td></tr>
+        <tr><td>Datos que llegan de afuera</td><td>Sin verificar</td><td>Tampoco verificados al ejecutar: TypeScript confía en que la API cumple la interfaz</td></tr>
+        <tr><td>Cantidad de código</td><td>Menos</td><td>Algo más (las anotaciones), aunque la inferencia ahorra muchas</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 3. JavaScript y TypeScript comparados en lo que importa para este proyecto.</figcaption>
+  </div>
+  <p>
+    JavaScript conviene para scripts cortos y prototipos que se descartan. Para un sistema que va a crecer, que van a
+    mantener otras personas y cuyo objetivo es «cambiar sin romper», TypeScript compensa su costo desde la primera
+    semana. Por eso el proyecto lo usa en modo estricto.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>La misma función, primero en JavaScript y después en TypeScript:</p>
+  <pre><code>// JavaScript: nada dice qué es "id" ni qué devuelve
+function buscarProducto(id) {
+  return productos.find((producto) =&gt; producto.id === id);
+}
+
+// TypeScript: recibe un número y devuelve un Producto, o undefined si no lo encuentra
+function buscarProducto(id: number): Producto | undefined {
+  return productos.find((producto) =&gt; producto.id === id);
+}</code></pre>
+
+  <p>El contrato de la API como interfaz, espejo de <code>ProductoOut</code>:</p>
+  <pre><code>interface Producto {
+  id: number;
+  nombre: string;
+  unidad: "kg" | "unidad";
+  precio: string;   // Decimal llega como texto
+  stock: string;
+}</code></pre>
+
+  <p>Comandos desde la carpeta de la etapa:</p>
+  <pre><code>npm install                     # instala el compilador de TypeScript (una vez)
+node 02_carrito.js              # JavaScript: resultados incorrectos y un error al final
+node 03_carrito_con_errores.ts  # TypeScript ejecutado: lo mismo, los tipos se borran
+npx tsc --noEmit                # TypeScript verificado: los errores, sin ejecutar
+node 04_carrito_corregido.ts    # la versión corregida</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    El módulo 08 crea el proyecto de React con la plantilla <code>react-ts</code> de Vite, que trae TypeScript
+    configurado en modo estricto: los componentes se escriben en archivos <code>.tsx</code> (TypeScript con JSX). En el
+    módulo 09, las respuestas de la API de la etapa 06 se describen con interfaces en <code>src/api/tipos.ts</code>, y
+    cada pantalla que usa un producto o una venta queda verificada contra ese contrato.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: el mismo error en los dos lenguajes</h2>
+  <p>
+    A la izquierda está <code>02_carrito.js</code> y a la derecha <code>03_carrito_con_errores.ts</code>, con su
+    numeración real. La consola de abajo muestra la salida real de cada comando.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="texto" aria-pressed="true">1. Texto + número</button>
+      <button type="button" class="escenario" data-escenario="tipeo" aria-pressed="false">2. Propiedad mal escrita</button>
+      <button type="button" class="escenario" data-escenario="faltante" aria-pressed="false">3. Producto inexistente</button>
+    </div>
+    <div class="escena escena-dividida mitades">
+      <div>
+        <p class="detalle-titulo">02_carrito.js</p>
+        <pre class="codigo-alto"><code id="codigo-js"></code></pre>
+      </div>
+      <div>
+        <p class="detalle-titulo">03_carrito_con_errores.ts</p>
+        <pre class="codigo-alto"><code id="codigo-ts"></code></pre>
+      </div>
+    </div>
+    <p class="detalle-titulo" id="consola-titulo" style="margin-top: 10px"></p>
+    <pre class="envolver"><code id="consola"></code></pre>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Creer que TypeScript valida los datos al ejecutar.</strong></p>
+    <p>Si la API devuelve <code>precio</code> como número y la interfaz dice <code>string</code>, TypeScript no se entera: los tipos ya no existen. Las interfaces describen lo que se espera; si el backend cambia el contrato, hay que actualizarlas.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Usar <code>any</code> para que desaparezcan los errores.</strong></p>
+    <p><code>any</code> apaga la verificación para ese valor y todo lo que se derive de él. Es volver a JavaScript sin avisarle a nadie. Cuando no se sabe el tipo, <code>unknown</code> obliga a comprobarlo antes de usarlo.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Usar <code>==</code> en lugar de <code>===</code>.</strong></p>
+    <p><code>"2" == 2</code> es verdadero porque <code>==</code> convierte tipos antes de comparar. <code>===</code> compara valor y tipo, que es lo que se espera viniendo de Python.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Olvidar el <code>await</code>.</strong></p>
+    <p>Sin <code>await</code>, <code>pedirProductos()</code> devuelve una promesa (una respuesta «pendiente»), no la lista. El código siguiente trabaja con la promesa y falla de formas confusas. TypeScript suele detectarlo, porque el tipo es <code>Promise&lt;Producto[]&gt;</code> y no <code>Producto[]</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Calcular dinero con <code>number</code>.</strong></p>
+    <p><code>1450 * 1.1</code> da <code>1595.0000000000002</code>. Para mostrar alcanza con redondear al formatear. Los cálculos que importan (totales, stock) los hace el backend con <code>Decimal</code>.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Escribí las interfaces <code>ItemVenta</code> y <code>Venta</code> que correspondan a <code>ItemVentaOut</code> y <code>VentaOut</code> de la etapa 06.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>interface ItemVenta {
+  producto_id: number;
+  nombre: string;
+  cantidad: string;
+  precio_unitario: string;
+  subtotal: string;
+}
+
+interface Venta {
+  id: number;
+  fecha: string;
+  usuario_id: number;
+  items: ItemVenta[];
+  total: string;
+}</code></pre>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> En <code>04_carrito_corregido.ts</code>, cambiá <code>unidad: "kg"</code> del queso por <code>unidad: "litro"</code> y ejecutá <code>npx tsc --noEmit</code>. ¿Qué dice? ¿Qué pasa si lo ejecutás con <code>node</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p><code>tsc</code> informa que <code>"litro"</code> no se puede asignar al tipo <code>"kg" | "unidad"</code>. Con <code>node</code> se ejecuta sin problemas, porque los tipos se borran. Es la misma protección que <code>Literal</code> en Pydantic, pero en el momento de escribir el código.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Reescribí el bucle de la cantidad total de <code>04_carrito_corregido.ts</code> con <code>reduce</code>, sin perder la conversión a número.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>const cantidadTotal = carrito.reduce((suma, item) =&gt; suma + Number(item.cantidad), 0);</code></pre>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> En <code>01_fundamentos.js</code>, ¿por qué «esta línea se imprime ANTES» aparece antes que «llegaron 3 productos», si está escrita después de llamar a <code>cargar()</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p><code>cargar()</code> llega al <code>await</code> y le devuelve el control al programa mientras espera los 300 ms. El programa sigue con la línea siguiente y la imprime. Cuando la promesa se resuelve, <code>cargar</code> continúa e imprime el mensaje de llegada. En una pantalla, eso evita que la interfaz se congele mientras espera al backend.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://developer.mozilla.org/es/docs/Web/JavaScript/Guide">MDN Web Docs: guía de JavaScript</a></li>
+    <li><a href="https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes.html">TypeScript para quien programa en JavaScript (en inglés)</a></li>
+    <li><a href="https://www.typescriptlang.org/docs/handbook/2/everyday-types.html">TypeScript: tipos de uso diario (en inglés)</a></li>
+    <li><a href="https://www.typescriptlang.org/tsconfig/#strict">TypeScript: la opción strict (en inglés)</a></li>
+    <li><a href="https://nodejs.org/api/typescript.html">Node.js: ejecución de TypeScript (en inglés)</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="06_seguridad.html">← Anterior: Módulo 06</a> ·
+    <a href="08_react_vite.html">Siguiente: Módulo 08, React + Vite →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // Copias exactas de los archivos de la etapa 07.
+  const CODIGO_JS = `// Etapa 07 - Un carrito en JavaScript con tres errores que JavaScript no avisa.
+// Ejecutar:  node 02_carrito.js
+
+const productos = [
+  { id: 1, nombre: "Queso cremoso", unidad: "kg", precio: 12500 },
+  { id: 2, nombre: "Leche entera 1 L", unidad: "unidad", precio: 1450 },
+];
+
+// Las cantidades llegan de un <input>: siempre son texto, aunque se escriban números.
+const carrito = [
+  { productoId: 1, cantidad: "0.350" },
+  { productoId: 2, cantidad: "2" },
+];
+
+function buscarProducto(id) {
+  return productos.find((producto) => producto.id === id);
+}
+
+// Error 1: se suma texto a un número.
+let cantidadTotal = 0;
+for (const item of carrito) {
+  cantidadTotal = cantidadTotal + item.cantidad;
+}
+console.log("1) cantidad total:", cantidadTotal);
+
+// Error 2: el nombre de la propiedad está mal escrito.
+let total = 0;
+for (const item of carrito) {
+  const producto = buscarProducto(item.productoId);
+  total = total + producto.precioo * item.cantidad;
+}
+console.log("2) total a cobrar:", total);
+
+// Error 3: un producto que no existe.
+const producto = buscarProducto(99);
+console.log("3) producto:", producto.nombre);`;
+
+  const CODIGO_TS = `// Etapa 07 - El mismo carrito en TypeScript, con los mismos tres errores.
+// Ejecutarlo:           node 03_carrito_con_errores.ts   (corre igual que el JS: los tipos se borran)
+// Verificar los tipos:  npx tsc --noEmit                 (encuentra los tres errores sin ejecutar nada)
+
+// El "contrato" de un producto: el mismo que ProductoOut en el backend.
+interface Producto {
+  id: number;
+  nombre: string;
+  unidad: "kg" | "unidad"; // como Literal["kg", "unidad"] en Pydantic
+  precio: number;
+}
+
+interface ItemCarrito {
+  productoId: number;
+  cantidad: string; // viene de un <input>, así que es texto
+}
+
+const productos: Producto[] = [
+  { id: 1, nombre: "Queso cremoso", unidad: "kg", precio: 12500 },
+  { id: 2, nombre: "Leche entera 1 L", unidad: "unidad", precio: 1450 },
+];
+
+const carrito: ItemCarrito[] = [
+  { productoId: 1, cantidad: "0.350" },
+  { productoId: 2, cantidad: "2" },
+];
+
+function buscarProducto(id: number): Producto | undefined {
+  return productos.find((producto) => producto.id === id);
+}
+
+// Error 1: se suma texto a un número.
+let cantidadTotal = 0;
+for (const item of carrito) {
+  cantidadTotal = cantidadTotal + item.cantidad;
+}
+console.log("1) cantidad total:", cantidadTotal);
+
+// Error 2: el nombre de la propiedad está mal escrito.
+let total = 0;
+for (const item of carrito) {
+  const producto = buscarProducto(item.productoId);
+  total = total + producto.precioo * item.cantidad;
+}
+console.log("2) total a cobrar:", total);
+
+// Error 3: un producto que no existe.
+const producto = buscarProducto(99);
+console.log("3) producto:", producto.nombre);`;
+
+  // Salidas reales de los comandos (Node 24 y TypeScript 7).
+  const SALIDA_EJECUCION = {
+    texto: "1) cantidad total: 00.3502",
+    tipeo: "1) cantidad total: 00.3502\n2) total a cobrar: NaN",
+    faltante: "1) cantidad total: 00.3502\n2) total a cobrar: NaN\n\nconsole.log(\"3) producto:\", producto.nombre);\n                                     ^\nTypeError: Cannot read properties of undefined (reading 'nombre')",
+  };
+  const SALIDA_TSC = {
+    texto: "03_carrito_con_errores.ts(35,3): error TS2322: Type 'string' is not assignable to type 'number'.",
+    tipeo: "03_carrito_con_errores.ts(43,19): error TS18048: 'producto' is possibly 'undefined'.\n03_carrito_con_errores.ts(43,28): error TS2551: Property 'precioo' does not exist on type 'Producto'. Did you mean 'precio'?\n03_carrito_con_errores.ts(43,38): error TS2363: The right-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.",
+    faltante: "03_carrito_con_errores.ts(49,29): error TS18048: 'producto' is possibly 'undefined'.",
+  };
+  const CORRECCION = {
+    texto: "cantidadTotal = cantidadTotal + Number(item.cantidad);\n\n> node 04_carrito_corregido.ts\n1) cantidad total: 2.35",
+    tipeo: "if (producto === undefined) {\n  throw new Error(`No existe el producto ${item.productoId}`);\n}\ntotal = total + producto.precio * Number(item.cantidad);\n\n> node 04_carrito_corregido.ts\n2) total a cobrar: 7275",
+    faltante: "console.log(\"3) producto:\", producto?.nombre ?? \"(no existe)\");\n\n> node 04_carrito_corregido.ts\n3) producto: (no existe)",
+  };
+
+  // [línea en el JS, línea en el TS] de cada error.
+  const LINEAS = { texto: [22, 35], tipeo: [30, 43], faltante: [36, 49] };
+
+  const TEXTOS = {
+    texto: {
+      codigo: "<p>Las cantidades vienen de un campo de texto, así que son <code>\"0.350\"</code> y <code>\"2\"</code>. El bucle las suma a un número. En los dos archivos, la línea resaltada es idéntica.</p>",
+      js: "<p>JavaScript ve <code>0 + \"0.350\"</code>, convierte el número en texto y <strong>concatena</strong>: <code>\"00.350\"</code>, y después <code>\"00.3502\"</code>. No hay ningún error. En pantalla, la cajera vería «00.3502 artículos».</p>",
+      tsc: "<p><code>tsc</code> sabe que <code>cantidadTotal</code> es un <code>number</code> (lo infirió del <code>0</code>) y que <code>item.cantidad</code> es un <code>string</code> (lo dice <code>ItemCarrito</code>). Avisa en la línea 35, columna 3, sin ejecutar nada.</p>",
+    },
+    tipeo: {
+      codigo: "<p>Alguien escribió <code>precioo</code> en lugar de <code>precio</code>. Además, <code>buscarProducto</code> podría no encontrar el producto, y la línea no lo contempla.</p>",
+      js: "<p>Leer una propiedad que no existe no es un error en JavaScript: devuelve <code>undefined</code>. <code>undefined * \"0.350\"</code> da <code>NaN</code>, y cualquier cuenta con <code>NaN</code> sigue dando <code>NaN</code>. El total a cobrar es «NaN» y nadie lo detecta hasta verlo en pantalla.</p>",
+      tsc: "<p>En una sola línea, <code>tsc</code> encuentra tres problemas: el producto puede ser <code>undefined</code>, <code>precioo</code> no existe en <code>Producto</code> (y sugiere <code>precio</code>), y <code>item.cantidad</code> es texto en una multiplicación.</p>",
+    },
+    faltante: {
+      codigo: "<p>Se busca el producto 99, que no existe, y se lee su nombre.</p>",
+      js: "<p>Esta vez JavaScript sí falla, pero <strong>recién al ejecutar esa línea</strong>. Si estuviera dentro de un botón que se usa poco, el error aparecería semanas después, frente a un cliente.</p>",
+      tsc: "<p><code>buscarProducto</code> declara que devuelve <code>Producto | undefined</code>. Con el modo estricto, <code>tsc</code> no deja leer <code>.nombre</code> sin comprobar antes que el producto existe.</p>",
+    },
+  };
+
+  function construirPasos(clave) {
+    const [lineaJs, lineaTs] = LINEAS[clave];
+    return [
+      { titulo: "El código", texto: TEXTOS[clave].codigo, lineas: [lineaJs, lineaTs], consolaTitulo: "", consola: "" },
+      { titulo: "JavaScript lo ejecuta", texto: TEXTOS[clave].js, lineas: [lineaJs, 0], consolaTitulo: "> node 02_carrito.js", consola: SALIDA_EJECUCION[clave] },
+      { titulo: "El .ts ejecutado hace lo mismo", texto: "<p>Node ejecuta el archivo TypeScript borrando los tipos, y el resultado es idéntico. Los tipos no protegen al ejecutar: protegen <em>antes</em>, cuando alguien los verifica.</p>", lineas: [0, lineaTs], consolaTitulo: "> node 03_carrito_con_errores.ts", consola: SALIDA_EJECUCION[clave] },
+      { titulo: "tsc lo encuentra sin ejecutar", texto: TEXTOS[clave].tsc, lineas: [0, lineaTs], consolaTitulo: "> npx tsc --noEmit", consola: SALIDA_TSC[clave] },
+      { titulo: "La corrección", texto: "<p>Siguiendo el aviso, la corrección está en <code>04_carrito_corregido.ts</code>. Después de corregir, <code>tsc</code> no informa errores en ese archivo.</p>", lineas: [0, 0], consolaTitulo: "04_carrito_corregido.ts", consola: CORRECCION[clave] },
+    ];
+  }
+
+  const ESCENARIOS = { texto: construirPasos("texto"), tipeo: construirPasos("tipeo"), faltante: construirPasos("faltante") };
+
+  function dibujarPaso(paso) {
+    escribirCodigo(document.getElementById("codigo-js"), CODIGO_JS, [paso.lineas[0]]);
+    escribirCodigo(document.getElementById("codigo-ts"), CODIGO_TS, [paso.lineas[1]]);
+    document.getElementById("consola-titulo").textContent = paso.consolaTitulo || "Consola";
+    document.getElementById("consola").textContent = paso.consola || "(todavía no se ejecutó nada)";
+  }
+
+  const recorrido = crearRecorrido(document.getElementById("recorrido"), ESCENARIOS.texto, dibujarPaso);
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

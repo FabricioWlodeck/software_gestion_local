@@ -440,6 +440,7 @@ details[open] summary { margin-bottom: 6px; }
 }
 
 .escena-dividida pre { margin: 0; }
+.escena-dividida.mitades { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 
 /* ---------- Tablas animadas (módulo 04) ---------- */
 
@@ -567,7 +568,7 @@ a.tarjeta:hover { border-color: var(--acento); box-shadow: var(--sombra); }
   body { font-size: 16px; }
   main { padding: 16px 16px 60px; }
   h1 { font-size: 1.6rem; }
-  .mensajes, .escena-dividida { grid-template-columns: minmax(0, 1fr); }
+  .mensajes, .escena-dividida, .escena-dividida.mitades { grid-template-columns: minmax(0, 1fr); }
   .tarjeta { grid-template-columns: 40px 1fr; }
   .estado { grid-row: auto; grid-column: 2; justify-self: start; }
 }
