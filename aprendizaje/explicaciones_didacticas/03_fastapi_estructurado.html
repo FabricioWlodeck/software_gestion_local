@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FastAPI estructurado</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 03</span><span>90 min</span><span>Código: <code>aprendizaje/etapas/03_fastapi_estructurado</code></span></p>
+    <h1>FastAPI estructurado: una carpeta por responsabilidad</h1>
+    <p>Cómo se divide el backend en routers, schemas, services y repositories, qué aporta cada capa y cómo las conecta FastAPI con <code>Depends</code>.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    El <code>main.py</code> de la etapa 02 tiene productos. El sistema real va a tener ventas, stock, proveedores,
+    usuarios, reportes y un bot de Telegram. Si todo sigue en un archivo, aparecen cuatro problemas concretos.
+  </p>
+  <ol>
+    <li>La regla «no se vende sin stock» queda dentro de una ruta HTTP, y el bot no la puede usar sin copiarla.</li>
+    <li>Pasar de memoria a MariaDB obliga a tocar todas las rutas, porque cada una accede al diccionario.</li>
+    <li>Probar una regla exige levantar el servidor y enviar peticiones HTTP.</li>
+    <li>Dos personas que editan el mismo archivo enorme chocan en cada cambio de git.</li>
+  </ol>
+  <p>
+    La etapa 03 reorganiza el código en capas y agrega las ventas, con control de stock. Los datos siguen en memoria,
+    a propósito: en el módulo 05 se pasan a MariaDB cambiando una sola capa.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Una capa, una pregunta</h3>
+  <p>
+    La idea central se llama <strong>separación de responsabilidades</strong>: cada archivo responde una sola
+    pregunta y no se mete en las de los demás (<strong>Tabla 1</strong>). Así, cuando algo cambia, se sabe qué
+    archivo tocar y cuáles quedan intactos.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Capa</th><th>Dónde</th><th>Pregunta que responde</th><th>Qué no hace</th></tr></thead>
+      <tbody>
+        <tr><td>Router</td><td><code>routers/</code></td><td>¿Qué ruta HTTP es y qué se devuelve?</td><td>No decide reglas ni accede a los datos</td></tr>
+        <tr><td>Schema</td><td><code>schemas/</code></td><td>¿Qué forma tienen los datos que entran y salen?</td><td>No consulta datos ni conoce reglas</td></tr>
+        <tr><td>Service</td><td><code>services/</code></td><td>¿Esto se puede hacer según las reglas del negocio?</td><td>No sabe de HTTP ni de cómo se guardan los datos</td></tr>
+        <tr><td>Repository</td><td><code>repositories/</code></td><td>¿Cómo se guardan y se buscan los datos?</td><td>No valida reglas del negocio</td></tr>
+        <tr><td>Errores</td><td><code>errores.py</code></td><td>¿Qué puede salir mal en el negocio?</td><td>No eligen el código HTTP</td></tr>
+        <tr><td>Dependencias</td><td><code>dependencies.py</code></td><td>¿Cómo se construye cada pieza?</td><td>No atienden rutas</td></tr>
+        <tr><td>Entrada</td><td><code>main.py</code></td><td>¿Qué piezas forman la aplicación?</td><td>No tiene rutas ni reglas propias</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Capas de la etapa 03 y responsabilidad de cada una.</figcaption>
+  </div>
+
+  <h3>2.2 Las dependencias van en una sola dirección</h3>
+  <p>
+    Los routers importan services, los services importan repositories, y nunca al revés. Ningún service importa
+    nada de FastAPI. Esa regla es la que permite reutilizar el service desde un script o un bot: el archivo
+    <code>probar_service.py</code> registra ventas sin servidor, sin HTTP y sin FastAPI.
+  </p>
+  <pre><code>routers/   ──usa──▶   services/   ──usa──▶   repositories/
+   │                     │                        │
+   └────────── todos usan schemas/ ───────────────┘
+                         │
+                 lanza errores.py  ──▶  main.py los traduce a HTTP</code></pre>
+
+  <h3>2.3 Inyección de dependencias con <code>Depends</code></h3>
+  <p>
+    Una ruta necesita un <code>ServicioVentas</code>, que a su vez necesita dos repositorios. En lugar de construirlos
+    adentro de la ruta, la ruta los <em>declara</em> en su firma: <code>servicio: ServicioVentasDep</code>. Antes de
+    ejecutar la ruta, FastAPI llama a la función indicada en <code>Depends(...)</code> y le pasa el resultado. Este
+    patrón se llama <strong>inyección de dependencias</strong>: la pieza recibe lo que necesita desde afuera en lugar
+    de fabricarlo.
+  </p>
+  <p>
+    La ganancia es que la forma de construir el service vive en un solo lugar. En el módulo 05,
+    <code>dependencies.py</code> pasa a crear repositorios con una conexión a MariaDB, y ninguna ruta cambia. Las
+    dependencias también sirven como <strong>guardias</strong>: <code>exigir_token</code> se agrega a cualquier ruta
+    con <code>dependencies=[Depends(exigir_token)]</code> y corta la petición con 401 antes de que la ruta se ejecute.
+  </p>
+
+  <h3>2.4 <code>APIRouter</code>: rutas agrupadas</h3>
+  <p>
+    Un <code>APIRouter</code> es un grupo de rutas con un prefijo común. <code>routers/ventas.py</code> crea uno con
+    <code>prefix="/ventas"</code>, así que <code>@router.post("")</code> atiende <code>POST /ventas</code>. En
+    <code>main.py</code>, <code>app.include_router(ventas.router)</code> suma esas rutas a la aplicación. El parámetro
+    <code>tags</code> agrupa las rutas en <code>/docs</code>.
+  </p>
+
+  <h3>2.5 Dos tipos de validación</h3>
+  <p>
+    El schema valida la <strong>forma</strong>: que <code>cantidad</code> sea un número mayor que cero con hasta 3
+    decimales. El service valida las <strong>reglas del negocio</strong>, que dependen de los datos guardados: que el
+    producto exista, que haya stock suficiente y que no se vendan fracciones de un producto que se vende por unidad.
+    Pydantic no puede saber que la leche se vende por unidad, porque eso depende del producto elegido.
+  </p>
+  <p>
+    Cuando una regla no se cumple, el service lanza un error propio del negocio, como <code>StockInsuficiente</code>.
+    Ese error no sabe nada de HTTP. En <code>main.py</code>, un <strong>manejador de excepciones</strong>
+    (<code>@app.exception_handler</code>) lo atrapa y elige el código: 404, 409 o 422.
+  </p>
+
+  <h3>2.6 Primero validar, después modificar</h3>
+  <p>
+    <code>ServicioVentas.registrar</code> trabaja en dos fases. Primero recorre todas las líneas y comprueba todas las
+    reglas sin modificar nada. Solo si todas pasan, descuenta el stock y guarda la venta. Si la segunda línea no
+    tuviera stock, la primera no quedaría descontada a medias. En el módulo 05 esta misma garantía la da una
+    transacción de la base de datos.
+  </p>
+
+  <h3>2.7 Paquetes e imports en Python</h3>
+  <p>
+    Una carpeta con un archivo <code>__init__.py</code> es un <strong>paquete</strong>: Python la trata como un módulo
+    que contiene otros. El código importa con rutas absolutas desde el paquete <code>app</code>, por ejemplo
+    <code>from app.services.ventas import ServicioVentas</code>. Para que Python encuentre <code>app</code>, el
+    servidor se lanza desde la carpeta de la etapa: <code>fastapi dev app/main.py</code>.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>El router queda reducido a traducir HTTP. La regla del stock no aparece:</p>
+  <pre><code>router = APIRouter(prefix="/ventas", tags=["ventas"])
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def registrar_venta(venta: VentaIn, servicio: ServicioVentasDep) -&gt; VentaOut:
+    return servicio.registrar(venta)</code></pre>
+
+  <p>El service concentra las reglas y no importa nada de FastAPI:</p>
+  <pre><code>for item in venta.items:
+    producto = self.productos.obtener(item.producto_id)
+    if producto is None:
+        raise ProductoNoEncontrado(item.producto_id)
+    if producto.unidad == "unidad" and item.cantidad != item.cantidad.to_integral_value():
+        raise CantidadInvalida(producto.nombre)
+    if producto.stock &lt; item.cantidad:
+        raise StockInsuficiente(producto.nombre, producto.stock, item.cantidad)</code></pre>
+
+  <p><code>main.py</code> traduce cada error del negocio a un código HTTP:</p>
+  <pre><code>CODIGOS_HTTP = {ProductoNoEncontrado: 404, StockInsuficiente: 409, CantidadInvalida: 422}
+
+@app.exception_handler(ErrorDeNegocio)
+def manejar_error_de_negocio(request: Request, error: ErrorDeNegocio) -&gt; JSONResponse:
+    codigo = CODIGOS_HTTP.get(type(error), 400)
+    return JSONResponse(status_code=codigo, content={"detail": str(error)})</code></pre>
+
+  <p>Se ejecuta desde la carpeta de la etapa:</p>
+  <pre><code>fastapi dev app/main.py       # la API completa
+python probar_service.py      # el mismo service, sin servidor</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    La prueba de que la división sirve es predecir qué archivos cambian ante cada pedido nuevo, y que sean pocos
+    (<strong>Tabla 2</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Cambio</th><th>Archivos que se tocan</th><th>Archivos que no se tocan</th></tr></thead>
+      <tbody>
+        <tr><td>Guardar los datos en MariaDB (módulo 05)</td><td><code>repositories/</code> y <code>dependencies.py</code></td><td>Routers, services y schemas</td></tr>
+        <tr><td>Agregar el bot de Telegram</td><td>Un archivo nuevo que usa los services</td><td>Todo lo existente</td></tr>
+        <tr><td>Responder 400 en lugar de 409 cuando falta stock</td><td><code>main.py</code></td><td>Services y errores</td></tr>
+        <tr><td>Nueva regla: no vender productos vencidos</td><td><code>services/ventas.py</code> y <code>errores.py</code></td><td>Routers</td></tr>
+        <tr><td>Agregar el campo <code>proveedor</code> al producto</td><td><code>schemas/producto.py</code> y el repositorio</td><td>Routers y services</td></tr>
+        <tr><td>Exigir usuario y rol en cada ruta (módulo 06)</td><td><code>dependencies.py</code> y la firma de las rutas</td><td>Services y repositories</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Archivos afectados por cada tipo de cambio.</figcaption>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: una venta atraviesa las capas</h2>
+  <p>
+    A la izquierda está el árbol de archivos, con el que interviene en cada paso resaltado. A la derecha está su
+    código, con la numeración real. Los tres escenarios comparten los primeros pasos y se separan en el service.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="ok" aria-pressed="true">Venta válida (201)</button>
+      <button type="button" class="escenario" data-escenario="sinStock" aria-pressed="false">Sin stock (409)</button>
+      <button type="button" class="escenario" data-escenario="fraccion" aria-pressed="false">1,5 leches (422)</button>
+    </div>
+
+    <div class="escena escena-dividida">
+      <ul class="arbol" id="arbol">
+        <li>app/</li>
+        <li>├── <span data-clave="main.py">main.py</span></li>
+        <li>├── config.py</li>
+        <li>├── <span data-clave="errores.py">errores.py</span></li>
+        <li>├── <span data-clave="dependencies.py">dependencies.py</span></li>
+        <li>├── routers/</li>
+        <li>│   ├── productos.py</li>
+        <li>│   └── <span data-clave="routers/ventas.py">ventas.py</span></li>
+        <li>├── schemas/</li>
+        <li>│   ├── producto.py</li>
+        <li>│   └── <span data-clave="schemas/venta.py">venta.py</span></li>
+        <li>├── services/</li>
+        <li>│   ├── productos.py</li>
+        <li>│   └── <span data-clave="services/ventas.py">ventas.py</span></li>
+        <li>└── repositories/</li>
+        <li>    └── <span data-clave="repositories/memoria.py">memoria.py</span></li>
+      </ul>
+      <div>
+        <p class="detalle-titulo" id="archivo-titulo"></p>
+        <pre class="codigo-alto"><code id="codigo-archivo"></code></pre>
+      </div>
+    </div>
+
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle" hidden>
+      <p class="detalle-titulo"></p>
+      <pre class="envolver"><code></code></pre>
+    </div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Lanzar <code>HTTPException</code> desde un service.</strong></p>
+    <p>Funciona en la API, pero ata el service a HTTP. Si el bot usa ese service, recibe un error con un código 409 que no significa nada en Telegram. El service lanza errores del negocio y la capa de HTTP los traduce.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Ejecutar <code>fastapi dev main.py</code> desde la carpeta <code>app</code>.</strong></p>
+    <p>Python no encuentra el paquete <code>app</code> y falla con <code>ModuleNotFoundError: No module named 'app'</code>. Se ejecuta desde la carpeta de la etapa: <code>fastapi dev app/main.py</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Importaciones circulares.</strong></p>
+    <p>Si un service importa algo de un router y el router importa el service, Python falla con un error de módulo «parcialmente inicializado». Respetar la dirección router → service → repository lo evita.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Crear el repositorio en memoria dentro de la dependencia.</strong></p>
+    <p>Si <code>obtener_servicio_ventas()</code> hiciera <code>RepositorioProductos()</code> en cada llamada, cada petición empezaría con el stock original y las ventas se perderían. Por eso los repositorios en memoria se crean una sola vez. En el módulo 05 pasa lo contrario: se abre una sesión de base de datos nueva por petición.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Cambiar un schema de entrada sin avisar a los clientes.</strong></p>
+    <p>Al agregar <code>stock</code> como obligatorio en <code>ProductoIn</code>, el <code>cliente.py</code> del módulo 01 empezó a recibir 422 al crear productos. Un campo nuevo obligatorio rompe el contrato; uno opcional con valor por defecto, no.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Sin mirar la Tabla 2, ¿qué archivos tocarías para (a) cambiar el texto del error de stock, (b) agregar la ruta <code>GET /ventas/{venta_id}</code> y (c) que el token se lea de una variable de entorno con otro nombre?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>(a) Solo <code>errores.py</code>. (b) <code>repositories/memoria.py</code> (método <code>obtener</code>), <code>services/ventas.py</code> (lanza un error si no existe), <code>errores.py</code> (el error nuevo), <code>main.py</code> (su código 404) y <code>routers/ventas.py</code> (la ruta). (c) Solo <code>config.py</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Reiniciá el servidor y enviá <code>{"items": [{"producto_id": 1, "cantidad": "1.5"}, {"producto_id": 1, "cantidad": "1.5"}]}</code>. Hay 2,1 kg de queso. ¿Qué pasa con el stock? ¿Dónde está el error y cómo se arregla?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>La venta se acepta y el stock queda en −0,9 kg. Cada línea se compara por separado contra el stock original (1,5 ≤ 2,1), pero juntas suman 3 kg. El error está en <code>services/ventas.py</code>. Se arregla sumando primero las cantidades pedidas de cada producto (por ejemplo, con un diccionario <code>producto_id → cantidad total</code>) y comparando esa suma con el stock.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Buscá la palabra <code>fastapi</code> dentro de <code>app/services/</code> y de <code>app/repositories/</code>. ¿Aparece? ¿Por qué importa?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>No aparece. Por eso esas capas se pueden usar desde <code>probar_service.py</code>, desde un bot o desde una prueba automática sin levantar un servidor.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> En <code>probar_service.py</code>, creá un repositorio de productos con todo el stock en cero (por ejemplo, una clase que herede de <code>RepositorioProductos</code> y lo modifique en su <code>__init__</code>) y pasáselo al service. ¿Tuviste que cambiar <code>ServicioVentas</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>No. El service recibe el repositorio desde afuera, así que funciona con cualquier objeto que tenga los mismos métodos. Todas las ventas se rechazan con <code>StockInsuficiente</code>. Esa es la misma idea que usan las pruebas automáticas para probar reglas sin base de datos.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/bigger-applications/">FastAPI: aplicaciones más grandes con múltiples archivos</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/dependencies/">FastAPI: dependencias</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/handling-errors/">FastAPI: manejo de errores y manejadores propios</a></li>
+    <li><a href="https://docs.python.org/es/3.12/tutorial/modules.html#packages">Python: paquetes</a></li>
+    <li><a href="https://docs.python.org/es/3.12/library/decimal.html">Python: módulo <code>decimal</code></a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="02_fastapi_basico.html">← Anterior: Módulo 02</a> ·
+    <a href="04_base_de_datos.html">Siguiente: Módulo 04, diseño de la base de datos →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // Copias exactas de los archivos de la etapa 03 (la numeración de líneas es la real).
+  const ARCHIVOS = {
+    "main.py": `"""
+Punto de entrada: crea la aplicación, le suma los routers y traduce los errores
+del negocio a códigos HTTP. No contiene rutas ni reglas propias.
+
+Ejecutar desde la carpeta de la etapa:  fastapi dev app/main.py
+"""
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from app.config import NOMBRE_APP, VERSION
+from app.errores import CantidadInvalida, ErrorDeNegocio, ProductoNoEncontrado, StockInsuficiente
+from app.routers import productos, ventas
+
+app = FastAPI(title=NOMBRE_APP, version=VERSION)
+app.include_router(productos.router)
+app.include_router(ventas.router)
+
+# Qué código HTTP corresponde a cada error del negocio.
+CODIGOS_HTTP = {
+    ProductoNoEncontrado: 404,
+    StockInsuficiente: 409,
+    CantidadInvalida: 422,
+}
+
+
+@app.exception_handler(ErrorDeNegocio)
+def manejar_error_de_negocio(request: Request, error: ErrorDeNegocio) -> JSONResponse:
+    codigo = CODIGOS_HTTP.get(type(error), 400)
+    return JSONResponse(status_code=codigo, content={"detail": str(error)})`,
+
+    "routers/ventas.py": `from fastapi import APIRouter, status
+
+from app.dependencies import ServicioVentasDep
+from app.schemas.venta import VentaIn, VentaOut
+
+router = APIRouter(prefix="/ventas", tags=["ventas"])
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def registrar_venta(venta: VentaIn, servicio: ServicioVentasDep) -> VentaOut:
+    return servicio.registrar(venta)
+
+
+@router.get("")
+def listar_ventas(servicio: ServicioVentasDep) -> list[VentaOut]:
+    return servicio.listar()`,
+
+    "schemas/venta.py": `from datetime import datetime
+from decimal import Decimal
+
+from pydantic import BaseModel, Field
+
+
+class ItemVentaIn(BaseModel):
+    """Una línea del pedido: qué producto y cuánto (en kg o en unidades)."""
+    producto_id: int
+    cantidad: Decimal = Field(gt=0, max_digits=10, decimal_places=3)
+
+
+class VentaIn(BaseModel):
+    """Lo que envía la caja al cobrar: al menos una línea."""
+    items: list[ItemVentaIn] = Field(min_length=1)
+
+
+class ItemVentaOut(BaseModel):
+    producto_id: int
+    nombre: str
+    cantidad: Decimal
+    precio_unitario: Decimal
+    subtotal: Decimal
+
+
+class VentaOut(BaseModel):
+    id: int
+    fecha: datetime
+    items: list[ItemVentaOut]
+    total: Decimal`,
+
+    "dependencies.py": `"""
+Dependencias: funciones que FastAPI ejecuta antes de cada ruta para entregarle lo que necesita.
+
+Una ruta declara \`servicio: ServicioVentasDep\` y FastAPI llama a obtener_servicio_ventas(),
+que a su vez pide los repositorios. La ruta no sabe cómo se construye el service:
+si mañana los repositorios usan MariaDB, solo cambia este archivo.
+"""
+
+from typing import Annotated
+
+from fastapi import Depends, Header, HTTPException
+
+from app.config import TOKEN_DE_PRUEBA
+from app.repositories.memoria import RepositorioProductos, RepositorioVentas
+from app.services.productos import ServicioProductos
+from app.services.ventas import ServicioVentas
+
+# Una sola instancia de cada repositorio mientras viva el proceso, porque los datos están en memoria.
+_repositorio_productos = RepositorioProductos()
+_repositorio_ventas = RepositorioVentas()
+
+
+def obtener_servicio_productos() -> ServicioProductos:
+    return ServicioProductos(_repositorio_productos)
+
+
+def obtener_servicio_ventas() -> ServicioVentas:
+    return ServicioVentas(_repositorio_productos, _repositorio_ventas)
+
+
+def exigir_token(authorization: Annotated[str | None, Header()] = None) -> None:
+    """Corta la petición con 401 si no trae el token. Se reutiliza en cualquier ruta."""
+    if authorization != f"Bearer {TOKEN_DE_PRUEBA}":
+        raise HTTPException(status_code=401, detail="Falta un token válido", headers={"WWW-Authenticate": "Bearer"})
+
+
+# Atajos para anotar parámetros: "este parámetro lo provee tal dependencia".
+ServicioProductosDep = Annotated[ServicioProductos, Depends(obtener_servicio_productos)]
+ServicioVentasDep = Annotated[ServicioVentas, Depends(obtener_servicio_ventas)]`,
+
+    "services/ventas.py": `from decimal import ROUND_HALF_UP, Decimal
+
+from app.errores import CantidadInvalida, ProductoNoEncontrado, StockInsuficiente
+from app.repositories.memoria import RepositorioProductos, RepositorioVentas
+from app.schemas.venta import ItemVentaOut, VentaIn, VentaOut
+
+CENTAVOS = Decimal("0.01")
+
+
+class ServicioVentas:
+    def __init__(self, productos: RepositorioProductos, ventas: RepositorioVentas):
+        self.productos = productos
+        self.ventas = ventas
+
+    def registrar(self, venta: VentaIn) -> VentaOut:
+        # 1. Se validan todas las líneas antes de modificar nada.
+        lineas: list[ItemVentaOut] = []
+        for item in venta.items:
+            producto = self.productos.obtener(item.producto_id)
+            if producto is None:
+                raise ProductoNoEncontrado(item.producto_id)
+            if producto.unidad == "unidad" and item.cantidad != item.cantidad.to_integral_value():
+                raise CantidadInvalida(producto.nombre)
+            if producto.stock < item.cantidad:
+                raise StockInsuficiente(producto.nombre, producto.stock, item.cantidad)
+            subtotal = (item.cantidad * producto.precio).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+            lineas.append(ItemVentaOut(
+                producto_id=producto.id,
+                nombre=producto.nombre,
+                cantidad=item.cantidad,
+                precio_unitario=producto.precio,
+                subtotal=subtotal,
+            ))
+
+        # 2. Si todo es válido, se aplican los cambios.
+        for linea in lineas:
+            self.productos.descontar_stock(linea.producto_id, linea.cantidad)
+        total = sum((linea.subtotal for linea in lineas), Decimal("0"))
+        return self.ventas.agregar(lineas, total)
+
+    def listar(self) -> list[VentaOut]:
+        return self.ventas.listar()`,
+
+    "repositories/memoria.py": `"""
+Repositorios en memoria.
+
+Guardan y buscan datos, y nada más: no validan reglas del negocio ni saben de HTTP.
+En el módulo 05 se reemplazan por repositorios que usan MariaDB, con los mismos
+métodos, y el resto de la aplicación no se entera del cambio.
+"""
+
+from datetime import datetime
+from decimal import Decimal
+
+from app.schemas.producto import ProductoIn, ProductoOut
+from app.schemas.venta import ItemVentaOut, VentaOut
+
+
+class RepositorioProductos:
+    def __init__(self):
+        self._productos: dict[int, ProductoOut] = {
+            1: ProductoOut(id=1, nombre="Queso cremoso", unidad="kg", precio=Decimal("12500.00"), stock=Decimal("2.100")),
+            2: ProductoOut(id=2, nombre="Leche entera 1 L", unidad="unidad", precio=Decimal("1450.00"), stock=Decimal("24")),
+            3: ProductoOut(id=3, nombre="Salame milán", unidad="kg", precio=Decimal("18900.00"), stock=Decimal("1.500")),
+        }
+        self._proximo_id = 4
+
+    def listar(self) -> list[ProductoOut]:
+        return list(self._productos.values())
+
+    def obtener(self, producto_id: int) -> ProductoOut | None:
+        return self._productos.get(producto_id)
+
+    def agregar(self, datos: ProductoIn) -> ProductoOut:
+        producto = ProductoOut(id=self._proximo_id, **datos.model_dump())
+        self._productos[producto.id] = producto
+        self._proximo_id += 1
+        return producto
+
+    def descontar_stock(self, producto_id: int, cantidad: Decimal) -> None:
+        producto = self._productos[producto_id]
+        self._productos[producto_id] = producto.model_copy(update={"stock": producto.stock - cantidad})
+
+    def borrar(self, producto_id: int) -> bool:
+        return self._productos.pop(producto_id, None) is not None
+
+
+class RepositorioVentas:
+    def __init__(self):
+        self._ventas: list[VentaOut] = []
+
+    def listar(self) -> list[VentaOut]:
+        return list(self._ventas)
+
+    def agregar(self, items: list[ItemVentaOut], total: Decimal) -> VentaOut:
+        venta = VentaOut(id=len(self._ventas) + 1, fecha=datetime.now(), items=items, total=total)
+        self._ventas.append(venta)
+        return venta`,
+
+    "errores.py": `"""
+Errores de las reglas del negocio.
+
+No saben nada de HTTP: el service los lanza y main.py decide con qué código
+responder a cada uno. Así el mismo service sirve para una API, un script o un bot.
+"""
+
+from decimal import Decimal
+
+
+class ErrorDeNegocio(Exception):
+    """Base de todos los errores de reglas del negocio."""
+
+
+class ProductoNoEncontrado(ErrorDeNegocio):
+    def __init__(self, producto_id: int):
+        super().__init__(f"No existe el producto {producto_id}")
+
+
+class StockInsuficiente(ErrorDeNegocio):
+    def __init__(self, nombre: str, disponible: Decimal, pedido: Decimal):
+        super().__init__(f"Stock insuficiente de {nombre}: hay {disponible} y se pidieron {pedido}")
+
+
+class CantidadInvalida(ErrorDeNegocio):
+    def __init__(self, nombre: str):
+        super().__init__(f"{nombre} se vende por unidad: la cantidad tiene que ser entera")`,
+  };
+
+  // Pasos que comparten los tres escenarios: arranque, ruta, schema y dependencia.
+  function pasosIniciales(cuerpo) {
+    return [
+      {
+        titulo: "main.py arma la aplicación",
+        texto: "<p>Al arrancar, <code>main.py</code> crea la app y le suma los routers con <code>include_router</code>. Así quedan registradas todas las rutas de <code>routers/ventas.py</code> con el prefijo <code>/ventas</code>. <code>main.py</code> no tiene ninguna ruta propia.</p>",
+        archivo: "main.py", resaltar: ["main.py"], lineas: [15, 16, 17],
+      },
+      {
+        titulo: "El router recibe POST /ventas",
+        texto: `<p>Llega <code>POST /ventas</code> con el cuerpo <code>${cuerpo}</code>. Coincide con la línea 9. Antes de ejecutar la función, FastAPI valida el cuerpo contra <code>VentaIn</code>, que vive en <code>schemas/venta.py</code>: al menos una línea, cada una con un id entero y una cantidad mayor que cero.</p>`,
+        archivo: "routers/ventas.py", resaltar: ["routers/ventas.py", "schemas/venta.py"], lineas: [9, 10],
+      },
+      {
+        titulo: "FastAPI resuelve la dependencia",
+        texto: "<p>La firma también pide <code>servicio: ServicioVentasDep</code>. Ese tipo dice «lo provee <code>obtener_servicio_ventas</code>» (línea 39), así que FastAPI llama a esa función, que arma el service con los dos repositorios. La ruta recibe un service listo, sin saber cómo se construyó.</p>",
+        archivo: "dependencies.py", resaltar: ["dependencies.py"], lineas: [27, 28, 39],
+      },
+      {
+        titulo: "El router delega en el service",
+        texto: "<p>El cuerpo de la ruta es una sola línea: le pasa al service los datos ya validados. El router no sabe nada de stock ni de cómo se calcula un total.</p>",
+        archivo: "routers/ventas.py", resaltar: ["routers/ventas.py"], lineas: [11],
+      },
+    ];
+  }
+
+  const ESCENARIOS = {
+    ok: [
+      ...pasosIniciales('{"items": [{"producto_id": 1, "cantidad": "0.350"}, {"producto_id": 2, "cantidad": "2"}]}'),
+      {
+        titulo: "El service valida cada línea",
+        texto: "<p>Fase 1. Para cada línea, el service le pide el producto al repositorio y comprueba las tres reglas: que exista, que no sea una fracción de un producto por unidad y que alcance el stock. Calcula el subtotal con dos decimales: 0,350 × 12.500 = 4.375,00 y 2 × 1.450 = 2.900,00. Todavía no modificó nada.</p>",
+        archivo: "services/ventas.py", resaltar: ["services/ventas.py"], lineas: [18, 19, 20, 22, 24, 26, 27],
+      },
+      {
+        titulo: "El repositorio entrega los productos",
+        texto: "<p>Cada <code>obtener</code> busca el producto en el diccionario. Es la única capa que sabe dónde están los datos. En el módulo 05, este método hace un <code>SELECT</code> en MariaDB y el service no cambia.</p>",
+        archivo: "repositories/memoria.py", resaltar: ["repositories/memoria.py"], lineas: [28, 29],
+      },
+      {
+        titulo: "Todo es válido: se aplican los cambios",
+        texto: "<p>Fase 2. Como todas las líneas pasaron, el service descuenta el stock de cada producto, suma el total (7.275,00) y le pide al repositorio que guarde la venta.</p>",
+        archivo: "services/ventas.py", resaltar: ["services/ventas.py"], lineas: [36, 37, 38, 39],
+      },
+      {
+        titulo: "El repositorio guarda",
+        texto: "<p>El repositorio actualiza el stock del producto y agrega la venta a la lista, con su id y su fecha.</p>",
+        archivo: "repositories/memoria.py", resaltar: ["repositories/memoria.py"], lineas: [37, 38, 39, 52, 53, 54, 55],
+      },
+      {
+        titulo: "El router responde 201",
+        texto: "<p>El <code>VentaOut</code> vuelve al router, que lo devuelve tal cual. FastAPI lo convierte a JSON y responde con el 201 del decorador.</p>",
+        archivo: "routers/ventas.py", resaltar: ["routers/ventas.py", "schemas/venta.py"], lineas: [9, 10, 11],
+        respuesta: '201 Created\n{"id":1,"fecha":"2026-11-03T00:42:39.349541","items":[{"producto_id":1,"nombre":"Queso cremoso","cantidad":"0.350","precio_unitario":"12500.00","subtotal":"4375.00"},{"producto_id":2,"nombre":"Leche entera 1 L","cantidad":"2","precio_unitario":"1450.00","subtotal":"2900.00"}],"total":"7275.00"}',
+      },
+    ],
+
+    sinStock: [
+      ...pasosIniciales('{"items": [{"producto_id": 1, "cantidad": "3.000"}]}'),
+      {
+        titulo: "No alcanza el stock",
+        texto: "<p>Después de la venta anterior quedan 1,750 kg de queso. La comparación de la línea 24 da verdadero (1,750 &lt; 3,000), y el service lanza <code>StockInsuficiente</code>. La ejecución sale de la función en ese mismo punto.</p>",
+        archivo: "services/ventas.py", resaltar: ["services/ventas.py", "errores.py"], lineas: [24, 25],
+      },
+      {
+        titulo: "El error del negocio no sabe de HTTP",
+        texto: "<p><code>StockInsuficiente</code> es una excepción común de Python que hereda de <code>ErrorDeNegocio</code>. Arma un mensaje legible, pero no elige un código HTTP: esa decisión no le corresponde.</p>",
+        archivo: "errores.py", resaltar: ["errores.py"], lineas: [11, 20, 21, 22],
+      },
+      {
+        titulo: "main.py traduce el error a 409",
+        texto: "<p>El manejador registrado para <code>ErrorDeNegocio</code> atrapa la excepción, busca su código en <code>CODIGOS_HTTP</code> (409) y responde. Las líneas 36 a 39 del service nunca se ejecutaron, así que el stock no cambió.</p>",
+        archivo: "main.py", resaltar: ["main.py"], lineas: [22, 27, 28, 29, 30],
+        respuesta: '409 Conflict\n{"detail":"Stock insuficiente de Queso cremoso: hay 1.750 y se pidieron 3.000"}',
+      },
+    ],
+
+    fraccion: [
+      ...pasosIniciales('{"items": [{"producto_id": 2, "cantidad": "1.5"}]}'),
+      {
+        titulo: "La forma es válida, la regla no",
+        texto: "<p>Para Pydantic, 1,5 es una cantidad válida: es mayor que cero y tiene menos de 3 decimales. Pero la leche se vende por unidad, y eso solo se sabe después de buscar el producto. La línea 22 detecta la fracción y lanza <code>CantidadInvalida</code>.</p>",
+        archivo: "services/ventas.py", resaltar: ["services/ventas.py", "errores.py"], lineas: [19, 22, 23],
+      },
+      {
+        titulo: "main.py traduce el error a 422",
+        texto: "<p>El mismo manejador atrapa este error y le asigna 422, como a los demás datos inválidos. Agregar una regla nueva no obligó a tocar ningún router.</p>",
+        archivo: "main.py", resaltar: ["main.py"], lineas: [23, 27, 28, 29, 30],
+        respuesta: '422 Unprocessable Entity\n{"detail":"Leche entera 1 L se vende por unidad: la cantidad tiene que ser entera"}',
+      },
+    ],
+  };
+
+  const raiz = document.getElementById("recorrido");
+
+  function dibujarPaso(paso) {
+    marcarActivos(document.getElementById("arbol"), paso.resaltar);
+    document.getElementById("archivo-titulo").textContent = `app/${paso.archivo}`;
+    escribirCodigo(document.getElementById("codigo-archivo"), ARCHIVOS[paso.archivo], paso.lineas);
+    mostrarDetalle(raiz, paso.respuesta ? { titulo: "Respuesta HTTP", codigo: paso.respuesta } : null);
+  }
+
+  const recorrido = crearRecorrido(raiz, ESCENARIOS.ok, dibujarPaso);
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>
