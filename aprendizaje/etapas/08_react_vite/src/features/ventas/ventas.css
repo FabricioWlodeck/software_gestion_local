@@ -1,0 +1,52 @@
+/* Estilos de la pantalla de ventas. Viven junto a sus componentes. */
+
+.pantalla-ventas {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.lista-productos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.tarjeta-producto,
+.carrito {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 12px 14px;
+}
+
+.tarjeta-producto h3 { margin: 0 0 4px; font-size: 1rem; }
+.tarjeta-producto p { margin: 2px 0; }
+.tarjeta-producto .precio { font-weight: 600; }
+.tarjeta-producto .stock { color: var(--texto-suave); font-size: 0.9rem; }
+.tarjeta-producto .fila { display: flex; gap: 8px; margin-top: 8px; }
+
+.error { color: var(--error); font-size: 0.9rem; }
+.mensaje-ok { color: var(--ok); }
+
+.carrito h2 { margin-top: 0; }
+.carrito ul { list-style: none; padding: 0; margin: 0; }
+
+.carrito li {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--borde);
+}
+
+.carrito .quitar { padding: 2px 8px; background: transparent; color: var(--error); border-color: var(--error); }
+.carrito .vacio { color: var(--texto-suave); }
+.carrito .total { font-size: 1.2rem; text-align: right; }
+.carrito .cobrar { width: 100%; padding: 10px; font-size: 1.05rem; }
+
+@media (max-width: 760px) {
+  .pantalla-ventas { grid-template-columns: minmax(0, 1fr); }
+}

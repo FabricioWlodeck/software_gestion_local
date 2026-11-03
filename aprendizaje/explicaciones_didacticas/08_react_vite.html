@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>React y Vite</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 08</span><span>100 min</span><span>Código: <code>aprendizaje/etapas/08_react_vite</code></span></p>
+    <h1>React + Vite: una interfaz hecha de componentes</h1>
+    <p>Cómo se crea, declara e inicializa un proyecto de React con Vite, cómo se arma una pantalla con componentes, props y estado, y qué aporta una librería de componentes como Mantine.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#mantine">6. Mantine</a></li>
+      <li><a href="#errores">7. Errores comunes</a></li>
+      <li><a href="#ejercicios">8. Ejercicios</a></li>
+      <li><a href="#documentacion">9. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    La pantalla de caja cambia todo el tiempo. Cuando la cajera agrega queso, hay que sumar una línea al carrito,
+    recalcular el total, habilitar el botón Cobrar y, quizás, mostrar un error en la tarjeta del producto. Con
+    JavaScript solo, cada uno de esos cambios se programa a mano: buscar el elemento de la página, modificarlo y
+    acordarse de modificar todos los que dependen de él. Con diez pantallas, mantener todo sincronizado se vuelve
+    imposible.
+  </p>
+  <p>
+    React invierte el enfoque. El programador describe cómo se ve la pantalla <em>para un estado dado</em> («con este
+    carrito, se ve así»), y cuando el estado cambia, React vuelve a calcular la pantalla y modifica solo lo necesario.
+    Vite es la herramienta que convierte ese código (TypeScript con JSX) en algo que el navegador entiende, y lo
+    actualiza al instante mientras se programa.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Qué hace Vite</h3>
+  <p>
+    El navegador no entiende TypeScript ni JSX, y tampoco conviene enviarle cientos de archivos sueltos. Vite resuelve
+    las dos cosas en dos modos. En <strong>desarrollo</strong> (<code>npm run dev</code>), levanta un servidor en
+    <code>http://localhost:5173</code>, transforma cada archivo cuando el navegador lo pide y, al guardar, reemplaza
+    solo el módulo modificado sin recargar la página. Eso se llama HMR (<em>Hot Module Replacement</em> o Reemplazo de
+    Módulos en Caliente), y conserva el estado: el carrito sigue lleno después de guardar un cambio. En
+    <strong>producción</strong> (<code>npm run build</code>), Vite verifica los tipos con <code>tsc</code>, empaqueta
+    todo en unos pocos archivos optimizados dentro de <code>dist/</code> y termina. Esos archivos son estáticos: los
+    puede servir cualquier servidor web, y en el módulo 10 los sirve nginx.
+  </p>
+  <p>
+    Node.js y npm (<em>Node Package Manager</em> o Gestor de Paquetes de Node) solo se usan para desarrollar y
+    construir. En el navegador de la cajera corre el resultado de <code>dist/</code>, sin Node.
+  </p>
+
+  <h3>2.2 Cómo se crea el proyecto</h3>
+  <p>
+    El proyecto se genera con la plantilla oficial: <code>npm create vite@latest 08_react_vite -- --template react-ts</code>.
+    La <strong>Tabla 1</strong> resume qué es cada archivo generado.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Archivo</th><th>Para qué sirve</th><th>Equivalente en el backend</th></tr></thead>
+      <tbody>
+        <tr><td><code>package.json</code></td><td>Dependencias y comandos (<code>dev</code>, <code>build</code>, <code>lint</code>)</td><td><code>requirements.txt</code></td></tr>
+        <tr><td><code>package-lock.json</code></td><td>Versiones exactas instaladas, para que todos instalen lo mismo</td><td>Un <code>requirements.txt</code> con versiones fijas</td></tr>
+        <tr><td><code>node_modules/</code></td><td>Las librerías instaladas (git las ignora)</td><td>El entorno virtual <code>.venv</code></td></tr>
+        <tr><td><code>index.html</code></td><td>La única página. Tiene un <code>&lt;div id="root"&gt;</code> vacío y carga <code>src/main.tsx</code></td><td>—</td></tr>
+        <tr><td><code>src/main.tsx</code></td><td>Punto de entrada: monta el componente raíz dentro de <code>#root</code></td><td><code>app/main.py</code></td></tr>
+        <tr><td><code>vite.config.ts</code></td><td>Configuración de Vite (el plugin de React; en el módulo 09, el proxy)</td><td><code>app/config.py</code></td></tr>
+        <tr><td><code>tsconfig*.json</code></td><td>Configuración de TypeScript. Con TypeScript 7, el modo estricto viene activado por defecto</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Archivos que genera la plantilla react-ts de Vite.</figcaption>
+  </div>
+
+  <h3>2.3 Cómo arranca la aplicación</h3>
+  <p>
+    El navegador pide <code>index.html</code>, que tiene un <code>&lt;div id="root"&gt;</code> vacío y una etiqueta
+    <code>&lt;script type="module" src="/src/main.tsx"&gt;</code>. <code>main.tsx</code> busca ese div y ejecuta
+    <code>createRoot(...).render(&lt;App /&gt;)</code>. A partir de ahí, React llama a la función <code>App</code>, que
+    devuelve el encabezado y <code>&lt;PantallaVentas /&gt;</code>; React llama a <code>PantallaVentas</code>, y así
+    sigue hasta las hojas del árbol. Toda la interfaz se dibuja dentro de ese único div.
+  </p>
+
+  <h3>2.4 Componentes y JSX</h3>
+  <p>
+    Un <strong>componente</strong> es una función que devuelve lo que se ve. Su nombre empieza con mayúscula y lo que
+    devuelve se escribe en JSX, una sintaxis parecida a HTML que Vite convierte en llamadas a funciones. Tiene algunas
+    diferencias con HTML: <code>class</code> se escribe <code>className</code>, las expresiones de TypeScript van entre
+    llaves (<code>{producto.nombre}</code>), y lo que devuelve un componente tiene un solo elemento raíz (o un
+    fragmento <code>&lt;&gt;...&lt;/&gt;</code>). Los archivos con JSX y TypeScript terminan en <code>.tsx</code>.
+  </p>
+
+  <h3>2.5 Props: datos de padre a hijo</h3>
+  <p>
+    Un componente recibe datos de su padre mediante <strong>props</strong>, que son los parámetros de la función.
+    <code>&lt;TarjetaProducto producto={queso} onAgregar={agregar} /&gt;</code> le pasa un producto y una función. Las
+    props se declaran con una interfaz de TypeScript, así que pasar un dato del tipo equivocado es un error de
+    compilación. Un componente nunca modifica sus props. Para avisarle algo al padre, llama a una función que el padre
+    le pasó: <code>onAgregar(producto, cantidad)</code>. Los datos bajan por props y los avisos suben por funciones.
+  </p>
+
+  <h3>2.6 Estado</h3>
+  <p>
+    El <strong>estado</strong> son los datos que cambian mientras la pantalla está abierta. Se crea con
+    <code>useState</code>: <code>const [carrito, setCarrito] = useState&lt;ItemCarrito[]&gt;([])</code> devuelve el
+    valor actual y una función para cambiarlo. Cada vez que se llama a <code>setCarrito</code>, React vuelve a ejecutar
+    el componente con el valor nuevo y actualiza lo que cambió en pantalla.
+  </p>
+  <p>
+    El estado se reemplaza, no se modifica. <code>carrito.push(item)</code> cambia el arreglo existente, React compara
+    y ve el mismo arreglo, y la pantalla no se actualiza. Se crea uno nuevo con el operador spread del módulo 07:
+    <code>setCarrito([...carrito, item])</code>.
+  </p>
+  <p>
+    La pregunta clave es <strong>dónde vive cada estado</strong>. La regla es ponerlo en el componente más cercano que
+    abarque a todos los que lo usan. El carrito lo usan la lista (para agregar) y el carrito (para mostrar), así que
+    vive en <code>PantallaVentas</code>, que es su padre común. La cantidad que se está escribiendo en una tarjeta solo
+    le importa a esa tarjeta, así que vive en <code>TarjetaProducto</code>.
+  </p>
+
+  <h3>2.7 Estado derivado</h3>
+  <p>
+    El total del carrito no es estado: se calcula a partir del carrito cada vez que el componente se dibuja. Guardarlo
+    aparte obligaría a mantener dos datos sincronizados, que es justamente el problema que React evita. Es la misma
+    idea que en la base de datos (módulo 04): cada dato se guarda en un solo lugar.
+  </p>
+
+  <h3>2.8 Listas y <code>key</code></h3>
+  <p>
+    Para dibujar una lista se usa <code>map</code>, y cada elemento lleva una <code>key</code> única:
+    <code>{productos.map((p) =&gt; &lt;TarjetaProducto key={p.id} ... /&gt;)}</code>. La <code>key</code> le permite a
+    React saber qué elemento es cuál entre un dibujo y el siguiente. Sin ella, si la lista se reordena, el estado local
+    de una tarjeta (la cantidad escrita) podría quedar en la tarjeta equivocada.
+  </p>
+
+  <h3>2.9 Efectos</h3>
+  <p>
+    Dibujar debe ser un cálculo sin efectos secundarios. Lo que interactúa con el mundo exterior (pedir datos al
+    backend, programar un temporizador) va en <code>useEffect</code>, que se ejecuta <em>después</em> de dibujar. El
+    segundo argumento es la lista de dependencias: con <code>[]</code>, el efecto se ejecuta una sola vez, al aparecer
+    el componente. <code>PantallaVentas</code> lo usa para cargar los productos, mientras muestra «Cargando
+    productos…».
+  </p>
+
+  <h3>2.10 Carpetas por funcionalidad</h3>
+  <p>
+    El código se agrupa por funcionalidad, no por tipo de archivo: todo lo de la pantalla de ventas (componentes y
+    estilos) está en <code>src/features/ventas/</code>. Cuando se agreguen las pantallas de stock e historial, cada una
+    tendrá su carpeta, y un cambio en ventas no obliga a buscar archivos repartidos por todo el proyecto. Lo compartido
+    (tipos, formatos) queda afuera, en <code>tipos.ts</code> y <code>utilidades/</code>.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>Un componente con props tipadas y estado local (<code>TarjetaProducto.tsx</code>, resumido):</p>
+  <pre><code>interface Props {
+  producto: Producto;
+  onAgregar: (producto: Producto, cantidad: string) =&gt; void;
+}
+
+export function TarjetaProducto({ producto, onAgregar }: Props) {
+  const [cantidad, setCantidad] = useState("0.250");
+
+  return (
+    &lt;article className="tarjeta-producto"&gt;
+      &lt;h3&gt;{producto.nombre}&lt;/h3&gt;
+      &lt;input value={cantidad} onChange={(evento) =&gt; setCantidad(evento.target.value)} /&gt;
+      &lt;button onClick={() =&gt; onAgregar(producto, cantidad)}&gt;Agregar&lt;/button&gt;
+    &lt;/article&gt;
+  );
+}</code></pre>
+
+  <p>El dueño del estado compartido (<code>PantallaVentas.tsx</code>, resumido):</p>
+  <pre><code>const [productos, setProductos] = useState&lt;Producto[]&gt;([]);
+const [carrito, setCarrito] = useState&lt;ItemCarrito[]&gt;([]);
+
+useEffect(() =&gt; {
+  cargarProductosDePrueba().then(setProductos);
+}, []);
+
+function agregar(producto: Producto, cantidad: string) {
+  setCarrito((anterior) =&gt; [...anterior, { producto, cantidad }]);
+}
+
+return (
+  &lt;&gt;
+    &lt;ListaProductos productos={productos} onAgregar={agregar} /&gt;
+    &lt;Carrito items={carrito} onQuitar={quitar} onCobrar={cobrar} /&gt;
+  &lt;/&gt;
+);</code></pre>
+
+  <p>Comandos desde la carpeta de la etapa:</p>
+  <pre><code>npm install       # una vez: descarga React, Vite y TypeScript en node_modules
+npm run dev       # http://localhost:5173 con recarga en caliente
+npm run build     # verifica tipos y genera dist/ para producción</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    La etapa 08 tiene tres puntos preparados para el módulo 09 (<strong>Tabla 2</strong>). Los componentes de la
+    lista, la tarjeta y el carrito no van a cambiar: solo cambia de dónde salen los datos y qué hace «Cobrar».
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>En la etapa 08</th><th>En el módulo 09</th></tr></thead>
+      <tbody>
+        <tr><td><code>cargarProductosDePrueba()</code> con una demora simulada</td><td><code>fetch("/api/productos")</code> con el token</td></tr>
+        <tr><td><code>cobrar()</code> muestra un mensaje y vacía el carrito</td><td><code>POST /api/ventas</code>; el total que se muestra es el que devuelve el backend</td></tr>
+        <tr><td><code>App</code> siempre muestra la caja</td><td><code>App</code> muestra el inicio de sesión si no hay token</td></tr>
+        <tr><td><code>tipos.ts</code> con <code>Producto</code></td><td>Se suman <code>Venta</code>, <code>Usuario</code> y <code>Token</code>, espejo de los schemas de la etapa 06</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Qué cambia al conectar la pantalla con el backend.</figcaption>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: cómo viajan los datos entre componentes</h2>
+  <p>
+    El árbol de componentes de la etapa, con el estado de <code>PantallaVentas</code> en el recuadro de abajo. Los
+    datos bajan por props; los avisos suben por funciones.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="inicio" aria-pressed="true">Al abrir la pantalla</button>
+      <button type="button" class="escenario" data-escenario="agregar" aria-pressed="false">Agregar 0,350 kg de queso</button>
+      <button type="button" class="escenario" data-escenario="invalido" aria-pressed="false">1,5 leches</button>
+    </div>
+    <div class="escena">
+      <svg class="diagrama" id="arbol-componentes" viewBox="0 0 960 440" role="img" aria-label="Árbol de componentes de la pantalla de ventas">
+        <line class="linea" x1="480" y1="70" x2="480" y2="110"/>
+        <line class="linea" x1="400" y1="190" x2="230" y2="230"/>
+        <line class="linea" x1="560" y1="190" x2="730" y2="230"/>
+        <line class="linea" x1="230" y1="290" x2="230" y2="330"/>
+        <g class="nodo" id="n-app"><rect x="400" y="10" width="160" height="60" rx="12"/>
+          <text class="titulo-nodo" x="480" y="45" text-anchor="middle">App</text></g>
+        <g class="nodo" id="n-pantalla"><rect x="330" y="110" width="300" height="80" rx="12"/>
+          <text class="titulo-nodo" x="480" y="142" text-anchor="middle">PantallaVentas</text>
+          <text class="sub" x="480" y="166" text-anchor="middle">estado: productos, carrito</text></g>
+        <g class="nodo" id="n-lista"><rect x="120" y="230" width="220" height="60" rx="12"/>
+          <text class="titulo-nodo" x="230" y="265" text-anchor="middle">ListaProductos</text></g>
+        <g class="nodo" id="n-carrito"><rect x="620" y="230" width="220" height="60" rx="12"/>
+          <text class="titulo-nodo" x="730" y="258" text-anchor="middle">Carrito</text>
+          <text class="sub" x="730" y="278" text-anchor="middle">total (derivado)</text></g>
+        <g class="nodo" id="n-tarjeta"><rect x="110" y="330" width="240" height="70" rx="12"/>
+          <text class="titulo-nodo" x="230" y="360" text-anchor="middle">TarjetaProducto ×5</text>
+          <text class="sub" x="230" y="382" text-anchor="middle">estado local: cantidad</text></g>
+        <g class="paquete"><rect x="-40" y="-15" width="80" height="30" rx="15"/><text x="0" y="5" text-anchor="middle"></text></g>
+      </svg>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle"><p class="detalle-titulo"></p><pre><code></code></pre></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="mantine">6. Librerías de componentes: qué es Mantine</h2>
+  <p>
+    La etapa dibuja botones, campos y tarjetas con HTML y CSS propios, para que se vean los fundamentos. En un sistema
+    real, cada pantalla necesita además tablas con orden y paginación, ventanas modales, avisos, selectores de fecha,
+    formularios con validación, menús y diseño para celular. Escribir todo eso bien (accesible con teclado, con buen
+    contraste, igual en todos los navegadores) lleva meses. Una <strong>librería de componentes</strong> los trae
+    hechos y probados.
+  </p>
+  <p>
+    <strong>Mantine</strong> es una librería de componentes para React escrita en TypeScript. Trae más de cien
+    componentes (<code>Button</code>, <code>TextInput</code>, <code>NumberInput</code>, <code>Table</code>,
+    <code>Modal</code>, <code>AppShell</code> para el esqueleto con barra lateral), un paquete de formularios
+    (<code>@mantine/form</code>), otro de avisos emergentes (<code>@mantine/notifications</code>) y ganchos útiles como
+    <code>useDisclosure</code> para abrir y cerrar paneles. Todo se ajusta desde un <strong>tema</strong> central
+    (colores, tipografía, bordes), que es lo que permite cambiar el aspecto de todo el sistema sin tocar cada pantalla.
+  </p>
+  <p>La misma tarjeta de producto, escrita con componentes de Mantine (ilustrativo: la etapa no instala Mantine):</p>
+  <pre><code>import { Button, Card, Group, NumberInput, Text } from "@mantine/core";
+
+export function TarjetaProducto({ producto, onAgregar }: Props) {
+  const [cantidad, setCantidad] = useState&lt;string | number&gt;(0.25);
+
+  return (
+    &lt;Card withBorder radius="md" padding="sm"&gt;
+      &lt;Text fw={600}&gt;{producto.nombre}&lt;/Text&gt;
+      &lt;Text c="dimmed" size="sm"&gt;Stock: {producto.stock}&lt;/Text&gt;
+      &lt;Group mt="xs"&gt;
+        &lt;NumberInput value={cantidad} onChange={setCantidad} min={0} decimalScale={3} /&gt;
+        &lt;Button onClick={() =&gt; onAgregar(producto, String(cantidad))}&gt;Agregar&lt;/Button&gt;
+      &lt;/Group&gt;
+    &lt;/Card&gt;
+  );
+}</code></pre>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Ventaja</th><th>Costo</th></tr></thead>
+      <tbody>
+        <tr><td>Componentes accesibles y probados, en lugar de escribirlos desde cero</td><td>Una dependencia más, que hay que actualizar con el proyecto</td></tr>
+        <tr><td>Aspecto consistente en todas las pantallas a partir de un tema</td><td>Aprender su API: nombres de componentes y propiedades (<code>fw</code>, <code>c</code>, <code>mt</code>)</td></tr>
+        <tr><td>Formularios, tablas, modales y avisos listos para usar</td><td>Las pantallas se parecen a las de otros sistemas hechos con Mantine, salvo que se personalice el tema</td></tr>
+        <tr><td>Escrita en TypeScript: las propiedades de cada componente están tipadas</td><td>Algo más de peso en el paquete final</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 3. Ventajas y costos de usar Mantine en el proyecto real.</figcaption>
+  </div>
+  <p>
+    Lo que aprendiste en este módulo no cambia con Mantine. Componentes, props, estado, efectos y carpetas por
+    funcionalidad funcionan igual: Mantine solo reemplaza los <code>&lt;button&gt;</code> y <code>&lt;input&gt;</code>
+    propios por componentes más completos.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">7. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Modificar el estado en lugar de reemplazarlo.</strong></p>
+    <p><code>carrito.push(item); setCarrito(carrito)</code> no actualiza la pantalla: React recibe el mismo arreglo y supone que nada cambió. Se crea uno nuevo con <code>[...carrito, item]</code>, y para quitar se usa <code>filter</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Guardar en el estado algo que se puede calcular.</strong></p>
+    <p>Un <code>useState</code> para el total obliga a actualizarlo cada vez que cambia el carrito, y tarde o temprano queda desfasado. Lo que se deriva de otro estado se calcula al dibujar.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Olvidar la <code>key</code>, o usar el índice como <code>key</code>.</strong></p>
+    <p>React avisa en la consola cuando falta. El índice (<code>key={i}</code>) parece funcionar, pero si la lista se reordena o se filtra, el estado local queda en el elemento equivocado. Se usa un identificador estable, como <code>producto.id</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Pedir datos al dibujar, sin <code>useEffect</code>.</strong></p>
+    <p>Si <code>cargarProductos().then(setProductos)</code> está en el cuerpo del componente, cada dibujo pide datos, cada respuesta cambia el estado y cada cambio provoca otro dibujo: un ciclo infinito de peticiones.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Sorprenderse de que el efecto se ejecute dos veces.</strong></p>
+    <p>En desarrollo, <code>StrictMode</code> monta, desmonta y vuelve a montar cada componente para detectar efectos mal escritos, y por eso los productos se piden dos veces. En la versión de producción no pasa.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Esperar que Vite frene por un error de tipos.</strong></p>
+    <p><code>npm run dev</code> borra los tipos sin verificarlos, como Node en el módulo 07. Los errores aparecen en el editor y en <code>npm run build</code>, que ejecuta <code>tsc</code> antes de empaquetar.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">8. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Agregá un campo de búsqueda arriba de la lista que filtre los productos por nombre. ¿En qué componente vive el texto buscado? ¿La lista filtrada es estado?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El texto vive en <code>PantallaVentas</code> con <code>useState("")</code>, porque es quien le pasa los productos a la lista. La lista filtrada <strong>no</strong> es estado: se deriva al dibujar, con <code>productos.filter((p) =&gt; p.nombre.toLowerCase().includes(busqueda.toLowerCase()))</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Hacé que el carrito muestre la cantidad de líneas en su título, por ejemplo «Carrito (2)». ¿Hace falta un estado nuevo?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>No. Es <code>items.length</code>, que <code>Carrito</code> ya recibe por props: <code>&lt;h2&gt;Carrito ({items.length})&lt;/h2&gt;</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> En <code>agregar</code>, cambiá <code>setCarrito((anterior) =&gt; [...])</code> por <code>carrito.push({ producto, cantidad }); setCarrito(carrito);</code>. ¿Qué pasa al tocar Agregar?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El carrito no se actualiza en pantalla. El arreglo cambió por dentro, pero es el mismo objeto, y React no vuelve a dibujar. Al tocar otra cosa que sí provoque un dibujo, aparecen de golpe las líneas acumuladas.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Con <code>npm run dev</code> abierto, cambiá el texto «Todavía no hay productos.» y guardá. ¿Se recargó la página? ¿Qué pasa si cambiás una prop obligatoria en <code>ListaProductos</code> y ejecutás <code>npm run build</code>?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>No se recarga: HMR reemplaza el módulo y conserva el estado. En el segundo caso, <code>npm run dev</code> puede seguir funcionando (o fallar en el navegador), pero <code>npm run build</code> se detiene con el error de tipos de <code>tsc</code>.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">9. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://es.react.dev/learn">React: inicio rápido</a></li>
+    <li><a href="https://es.react.dev/learn/thinking-in-react">React: pensar en React (cómo dividir una pantalla y dónde poner el estado)</a></li>
+    <li><a href="https://es.react.dev/learn/sharing-state-between-components">React: compartir estado entre componentes</a></li>
+    <li><a href="https://es.react.dev/learn/synchronizing-with-effects">React: sincronizar con efectos</a></li>
+    <li><a href="https://vite.dev/guide/">Vite: guía (en inglés)</a></li>
+    <li><a href="https://mantine.dev/getting-started/">Mantine: primeros pasos (en inglés)</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="07_js_vs_ts.html">← Anterior: Módulo 07</a> ·
+    <a href="09_front_back.html">Siguiente: Módulo 09, frontend ↔ backend →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // Dónde se ubica el paquete en cada componente: justo debajo de su recuadro.
+  const POS = { app: [480, 90], pantalla: [480, 210], lista: [230, 310], carrito: [730, 310], tarjeta: [230, 420] };
+
+  const ESCENARIOS = {
+    inicio: [
+      {
+        titulo: "main.tsx monta App",
+        texto: "<p><code>createRoot(...).render(&lt;App /&gt;)</code> le pide a React que dibuje <code>App</code> dentro del div <code>#root</code>. React llama a la función <code>App</code>, que devuelve el encabezado y <code>&lt;PantallaVentas /&gt;</code>.</p>",
+        nodos: { app: "activo" }, paquete: { en: "app", etiqueta: "render()" },
+        detalle: { titulo: "src/main.tsx", codigo: 'createRoot(document.getElementById("root")!).render(\n  <StrictMode>\n    <App />\n  </StrictMode>,\n);' },
+      },
+      {
+        titulo: "PantallaVentas se dibuja vacía",
+        texto: "<p>React llama a <code>PantallaVentas</code>. Su estado arranca con los valores iniciales: sin productos, carrito vacío y <code>cargando = true</code>. Devuelve «Cargando productos…» y un carrito vacío.</p>",
+        nodos: { pantalla: "activo", carrito: "activo" }, paquete: { en: "pantalla", etiqueta: "productos = []" },
+        detalle: { titulo: "Estado de PantallaVentas", codigo: "productos = []\ncargando  = true\ncarrito   = []" },
+      },
+      {
+        titulo: "El efecto pide los productos",
+        texto: "<p>Recién <em>después</em> de dibujar, React ejecuta el <code>useEffect</code>. Pide los productos (en la etapa, una función que espera 600 ms; en el módulo 09, el backend). Mientras tanto, la cajera ve «Cargando productos…».</p>",
+        nodos: { pantalla: "activo" }, paquete: { en: "pantalla", etiqueta: "useEffect → cargar" },
+        detalle: { titulo: "src/features/ventas/PantallaVentas.tsx", codigo: "useEffect(() => {\n  cargarProductosDePrueba().then((lista) => {\n    setProductos(lista);\n    setCargando(false);\n  });\n}, []);" },
+      },
+      {
+        titulo: "Cambia el estado: React vuelve a dibujar",
+        texto: "<p>Llegan los productos. <code>setProductos</code> y <code>setCargando</code> cambian el estado, y React vuelve a ejecutar <code>PantallaVentas</code> con los valores nuevos. Esta vez devuelve <code>&lt;ListaProductos productos={productos} /&gt;</code>.</p>",
+        nodos: { pantalla: "ok" }, paquete: { en: "pantalla", etiqueta: "productos = [5]", tipo: "ok" },
+        detalle: { titulo: "Estado de PantallaVentas", codigo: "productos = [Queso cremoso, Leche entera 1 L, Salame milán, Yogur bebible 1 L, Queso rallado 150 g]\ncargando  = false\ncarrito   = []" },
+      },
+      {
+        titulo: "Los datos bajan por props",
+        texto: "<p><code>ListaProductos</code> recibe la lista por props y dibuja una <code>TarjetaProducto</code> por producto, cada una con su <code>key</code>. Cada tarjeta recibe su producto y la función <code>onAgregar</code>.</p>",
+        nodos: { lista: "activo", tarjeta: "activo" }, paquete: { en: "tarjeta", etiqueta: "props: producto, onAgregar" },
+        detalle: { titulo: "src/features/ventas/ListaProductos.tsx", codigo: "{productos.map((producto) => (\n  <TarjetaProducto key={producto.id} producto={producto} onAgregar={onAgregar} />\n))}" },
+      },
+    ],
+    agregar: [
+      {
+        titulo: "La cajera escribe 0.350",
+        texto: "<p>La cantidad que se escribe es estado local de la tarjeta del queso. Cada tecla llama a <code>setCantidad</code>, y React vuelve a dibujar <strong>solo esa tarjeta</strong>: la pantalla y el carrito no se enteran.</p>",
+        nodos: { tarjeta: "activo" }, paquete: { en: "tarjeta", etiqueta: "cantidad = \"0.350\"" },
+        detalle: { titulo: "src/features/ventas/TarjetaProducto.tsx", codigo: 'const [cantidad, setCantidad] = useState(producto.unidad === "kg" ? "0.250" : "1");\n...\n<input value={cantidad} onChange={(evento) => setCantidad(evento.target.value)} />' },
+      },
+      {
+        titulo: "Toca Agregar: el aviso sube",
+        texto: "<p>La tarjeta valida la cantidad y llama a <code>onAgregar(producto, \"0.350\")</code>. La tarjeta no sabe qué es un carrito: solo avisa. Esa función la escribió <code>PantallaVentas</code> y la pasó hacia abajo por props.</p>",
+        nodos: { tarjeta: "activo", lista: "activo" }, paquete: { en: "lista", etiqueta: "onAgregar(queso, \"0.350\")" },
+        detalle: { titulo: "src/features/ventas/TarjetaProducto.tsx", codigo: "setError(null);\nonAgregar(producto, cantidad); // avisa al componente padre; la tarjeta no conoce el carrito" },
+      },
+      {
+        titulo: "PantallaVentas crea un carrito nuevo",
+        texto: "<p>La función <code>agregar</code> de <code>PantallaVentas</code> recibe el aviso y llama a <code>setCarrito</code> con un <strong>arreglo nuevo</strong>, que tiene lo anterior más la línea del queso. React compara referencias, ve un arreglo distinto y programa un nuevo dibujo.</p>",
+        nodos: { pantalla: "ok" }, paquete: { en: "pantalla", etiqueta: "setCarrito([...anterior, item])", tipo: "ok" },
+        detalle: { titulo: "Estado de PantallaVentas", codigo: "carrito = [\n  { producto: Queso cremoso, cantidad: \"0.350\" }\n]" },
+      },
+      {
+        titulo: "El carrito recibe props nuevas",
+        texto: "<p>React vuelve a ejecutar <code>PantallaVentas</code>, que le pasa el carrito nuevo a <code>&lt;Carrito items={carrito} /&gt;</code>. <code>Carrito</code> calcula el total en ese mismo dibujo: 0,350 × $12.500 = $4.375. El total no está guardado en ningún estado.</p>",
+        nodos: { carrito: "ok" }, paquete: { en: "carrito", etiqueta: "items: [queso] → total $4.375", tipo: "ok" },
+        detalle: { titulo: "src/features/ventas/Carrito.tsx", codigo: "const total = items.reduce((suma, item) => suma + calcularSubtotal(item.producto.precio, item.cantidad), 0);" },
+      },
+    ],
+    invalido: [
+      {
+        titulo: "La cajera escribe 1.5 en la leche",
+        texto: "<p>Igual que antes, la cantidad es estado local de la tarjeta de la leche.</p>",
+        nodos: { tarjeta: "activo" }, paquete: { en: "tarjeta", etiqueta: "cantidad = \"1.5\"" },
+        detalle: { titulo: "Estado local de la tarjeta de la leche", codigo: 'cantidad = "1.5"\nerror    = null' },
+      },
+      {
+        titulo: "La tarjeta rechaza y no avisa",
+        texto: "<p>Al tocar Agregar, la tarjeta ve que la leche se vende por unidad y que 1,5 no es entero. Cambia su propio estado <code>error</code> y <strong>no llama a <code>onAgregar</code></strong>. El aviso nunca sube: ni la pantalla ni el carrito se vuelven a dibujar.</p>",
+        nodos: { tarjeta: "error" }, paquete: { en: "tarjeta", etiqueta: "error local", tipo: "error" },
+        detalle: { titulo: "src/features/ventas/TarjetaProducto.tsx", codigo: 'if (producto.unidad === "unidad" && !Number.isInteger(numero)) {\n  setError("Este producto se vende por unidad");\n  return;\n}' },
+      },
+      {
+        titulo: "El backend vuelve a validar",
+        texto: "<p>Esta validación es para dar una respuesta inmediata en pantalla. La regla que protege los datos sigue estando en el service del backend, que responde 422 aunque alguien envíe la petición sin usar esta pantalla (módulos 00 y 03).</p>",
+        nodos: { tarjeta: "error", pantalla: "activo" }, paquete: { en: "pantalla", etiqueta: "carrito sin cambios" },
+        detalle: { titulo: "Estado de PantallaVentas", codigo: "carrito = []   (sin cambios)" },
+      },
+    ],
+  };
+
+  const raiz = document.getElementById("recorrido");
+  const dibujarArbol = crearDiagrama(document.getElementById("arbol-componentes"), POS);
+  const recorrido = crearRecorrido(raiz, ESCENARIOS.inicio, (paso) => {
+    dibujarArbol(paso);
+    mostrarDetalle(raiz, paso.detalle);
+  });
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

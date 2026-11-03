@@ -1,0 +1,79 @@
+/* Estilos globales: colores como variables, para cambiarlos en un solo lugar. */
+
+:root {
+  --fondo: #f6f4ef;
+  --superficie: #ffffff;
+  --texto: #1d2127;
+  --texto-suave: #5a616b;
+  --borde: #d8d2c4;
+  --acento: #1f5fa8;
+  --sobre-acento: #ffffff;
+  --ok: #1a7346;
+  --error: #b42318;
+  --radio: 10px;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #14161a;
+    --superficie: #1c1f24;
+    --texto: #e7e9ec;
+    --texto-suave: #a3aab3;
+    --borde: #343a42;
+    --acento: #79adf2;
+    --sobre-acento: #10141a;
+    --ok: #5fcf96;
+    --error: #ff8a80;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--acento);
+  background: var(--acento);
+  color: var(--sobre-acento);
+  cursor: pointer;
+}
+
+button:disabled { opacity: 0.45; cursor: default; }
+
+input {
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: var(--superficie);
+  color: var(--texto);
+  width: 100%;
+}
+
+.barra {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+}
+
+.barra h1 { margin: 0; font-size: 1.4rem; }
+.barra span { color: var(--texto-suave); }
+
+main { padding: 16px 24px; }
+
+@media (max-width: 640px) {
+  .barra, main { padding-left: 16px; padding-right: 16px; }
+}
