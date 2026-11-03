@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FastAPI desde cero</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 02</span><span>75 min</span><span>Código: <code>aprendizaje/etapas/02_fastapi_basico</code></span></p>
+    <h1>FastAPI desde cero: la misma API en la mitad de líneas</h1>
+    <p>Cómo se instala FastAPI, cómo se arranca el servidor, cómo se declaran rutas y parámetros y qué hace FastAPI por su cuenta con cada petición.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    El servidor de la etapa 01 funciona, pero ocupa 189 líneas para tres rutas. La mayor parte de ese código no
+    tiene nada que ver con Punto Lácteo: separa rutas con expresiones regulares, lee el cuerpo, convierte JSON,
+    valida campo por campo y arma headers. Cada ruta nueva repetiría ese trabajo, y cada repetición es una
+    oportunidad de equivocarse.
+  </p>
+  <p>
+    Un <strong>framework</strong> resuelve esa parte repetitiva una sola vez. Con FastAPI, el programador declara
+    qué datos espera cada ruta y qué devuelve, y FastAPI se encarga del resto. La etapa 02 reescribe la misma API
+    en 89 líneas, con las mismas rutas y los mismos campos.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 FastAPI es la aplicación; Uvicorn es el servidor</h3>
+  <p>
+    En la etapa 01, un mismo archivo hacía dos trabajos: escuchar el puerto 8000 y decidir qué responder. Con FastAPI
+    esos trabajos se separan en dos programas (<strong>Tabla 1</strong>). Uvicorn es el <strong>servidor</strong>:
+    abre el puerto, recibe los bytes y entrega cada petición a la aplicación. FastAPI es la
+    <strong>aplicación</strong>: decide qué función atiende cada ruta y arma la respuesta.
+  </p>
+  <p>
+    Los dos se entienden mediante ASGI (<em>Asynchronous Server Gateway Interface</em> o Interfaz de Pasarela de
+    Servidor Asíncrona), un estándar de Python que define cómo un servidor le pasa una petición a una aplicación.
+    Gracias a ese estándar, Uvicorn podría reemplazarse por otro servidor ASGI sin tocar el código de la API.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Trabajo</th><th>Etapa 01</th><th>Etapa 02</th></tr></thead>
+      <tbody>
+        <tr><td>Escuchar el puerto y recibir bytes</td><td><code>ThreadingHTTPServer</code></td><td>Uvicorn</td></tr>
+        <tr><td>Elegir qué código atiende cada ruta</td><td><code>if</code> y expresiones regulares en <code>do_GET</code></td><td>Decoradores <code>@app.get(...)</code></td></tr>
+        <tr><td>Leer y validar los datos</td><td><code>json.loads</code> + <code>validar_producto()</code></td><td>Anotaciones de tipo y Pydantic</td></tr>
+        <tr><td>Armar la respuesta</td><td><code>json.dumps</code> + <code>send_header</code></td><td>FastAPI convierte lo que devuelve la función</td></tr>
+        <tr><td>Documentar la API</td><td>No existe</td><td>Automática en <code>/docs</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Quién hace cada trabajo en la etapa 01 y en la etapa 02.</figcaption>
+  </div>
+
+  <h3>2.2 El entorno virtual</h3>
+  <p>
+    Un entorno virtual es una carpeta con su propio intérprete de Python y sus propias librerías. Sirve para que cada
+    proyecto tenga las versiones que necesita sin afectar a los demás ni a la instalación de Windows. Todo el
+    aprendizaje comparte uno, en <code>aprendizaje/.venv</code>. Se crea una vez, se activa en cada terminal nueva
+    y después se instala lo que pide cada etapa:
+  </p>
+  <pre><code>python -m venv .venv                       # crea el entorno (una sola vez)
+.venv\Scripts\Activate.ps1                 # lo activa en esta terminal: el prompt muestra (.venv)
+pip install -r etapas/02_fastapi_basico/requirements.txt</code></pre>
+  <p>
+    El archivo <code>requirements.txt</code> lista las librerías del proyecto. La línea <code>fastapi[standard]</code>
+    instala FastAPI junto con sus extras habituales, entre ellos Uvicorn y el comando <code>fastapi</code>.
+  </p>
+
+  <h3>2.3 Arrancar el servidor</h3>
+  <p>
+    El comando <code>fastapi dev main.py</code> busca la variable <code>app</code> en <code>main.py</code>, arranca
+    Uvicorn en <code>http://127.0.0.1:8000</code> y lo reinicia cada vez que se guarda un archivo. Esa recarga
+    automática es cómoda para desarrollar, pero en producción se usa <code>fastapi run</code>, que no vigila archivos.
+    Por dentro, los dos ejecutan algo equivalente a <code>uvicorn main:app</code>, que significa «la variable
+    <code>app</code> del módulo <code>main</code>».
+  </p>
+
+  <h3>2.4 Rutas con decoradores</h3>
+  <p>
+    Un decorador es una línea que empieza con <code>@</code> y modifica o registra la función que tiene debajo.
+    <code>@app.get("/productos")</code> le dice a FastAPI que esa función atiende las peticiones <code>GET</code> a
+    <code>/productos</code>. Al arrancar, FastAPI recorre todos los decoradores y arma una tabla de rutas. Las llaves
+    marcan las partes variables de la ruta: <code>/productos/{producto_id}</code> coincide con
+    <code>/productos/1</code>, con <code>/productos/99</code> y también con <code>/productos/abc</code>.
+  </p>
+
+  <h3>2.5 De dónde saca FastAPI cada parámetro</h3>
+  <p>
+    FastAPI lee la firma de la función y decide de qué parte de la petición sale cada parámetro, según las reglas
+    de la <strong>Tabla 2</strong>. Después convierte cada valor al tipo anotado. Si no puede, responde 422 sin
+    ejecutar la función.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Si el parámetro…</th><th>FastAPI lo lee de…</th><th>Ejemplo en <code>main.py</code></th></tr></thead>
+      <tbody>
+        <tr><td>Tiene el mismo nombre que una parte variable de la ruta</td><td>La ruta (<em>path parameter</em>)</td><td><code>producto_id: int</code> en <code>/productos/{producto_id}</code></td></tr>
+        <tr><td>Es de un tipo simple (<code>int</code>, <code>str</code>, <code>Literal</code>...) y no está en la ruta</td><td>Los parámetros de consulta, después del <code>?</code> (<em>query parameter</em>)</td><td><code>unidad</code> en <code>/productos?unidad=kg</code></td></tr>
+        <tr><td>Es un modelo de Pydantic</td><td>El cuerpo JSON</td><td><code>datos: ProductoIn</code></td></tr>
+        <tr><td>Está marcado con <code>Header()</code></td><td>Un header</td><td><code>authorization</code> → header <code>Authorization</code></td></tr>
+        <tr><td>Es de tipo <code>Response</code></td><td>No viene de la petición: FastAPI entrega la respuesta en construcción para agregarle headers</td><td><code>response: Response</code></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Reglas con las que FastAPI asigna cada parámetro de la función.</figcaption>
+  </div>
+
+  <h3>2.6 Pydantic: la forma de los datos</h3>
+  <p>
+    Pydantic es la librería que valida datos a partir de clases. Una clase que hereda de <code>BaseModel</code>
+    declara los campos y sus tipos, y <code>Field</code> agrega restricciones. En <code>ProductoIn</code>, el nombre
+    tiene entre 1 y 80 caracteres, la unidad solo puede ser <code>"kg"</code> o <code>"unidad"</code> (eso expresa
+    <code>Literal</code>) y el precio es un <code>Decimal</code> mayor que cero con hasta 2 decimales. Esas tres
+    líneas reemplazan a la función <code>validar_producto</code> de la etapa 01.
+  </p>
+  <p>
+    Cuando los datos no cumplen el schema, FastAPI responde 422 con una lista de errores. Cada error indica dónde
+    está el problema (<code>loc</code>, por ejemplo <code>["body", "precio"]</code>), qué regla falló
+    (<code>type</code>), un mensaje (<code>msg</code>) y el valor recibido (<code>input</code>).
+  </p>
+
+  <h3>2.7 La respuesta</h3>
+  <p>
+    La función devuelve objetos de Python y FastAPI los convierte a JSON. La anotación de retorno
+    (<code>-&gt; ProductoOut</code>) funciona como <strong>modelo de respuesta</strong>: FastAPI valida lo que sale y
+    descarta cualquier campo que no figure en él. En el módulo 06 eso evita que el hash de una contraseña llegue al
+    navegador por accidente.
+  </p>
+  <p>
+    El código de éxito se fija en el decorador con <code>status_code=201</code>. Para responder con un error, la
+    función lanza <code>HTTPException</code>. No es una falla del programa: es la forma de pedirle a FastAPI que
+    corte ahí y responda con ese código y ese <code>detail</code>.
+  </p>
+
+  <h3>2.8 Documentación automática</h3>
+  <p>
+    FastAPI genera la descripción completa de la API en formato OpenAPI (<em>OpenAPI Specification</em> o
+    Especificación OpenAPI), un estándar para describir rutas, parámetros y respuestas. Esa descripción está en
+    <code>/openapi.json</code>, y <code>/docs</code> la muestra como una página interactiva donde se puede probar cada
+    ruta con el botón «Try it out». Como sale del código, la documentación no queda desactualizada.
+  </p>
+
+  <div class="nota">
+    <p><strong>¿<code>def</code> o <code>async def</code>?</strong> FastAPI acepta los dos. Una función
+    <code>def</code> se ejecuta en un hilo aparte, así que no bloquea a las demás peticiones. Las etapas usan
+    <code>def</code> porque SQLAlchemy, en el módulo 05, se usa de forma sincrónica. <code>async def</code> conviene
+    cuando la función espera operaciones asíncronas con <code>await</code>.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>El schema reemplaza la validación manual:</p>
+  <pre><code>class ProductoIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=80)
+    unidad: Literal["kg", "unidad"]
+    precio: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+
+class ProductoOut(ProductoIn):
+    id: int</code></pre>
+
+  <p>Cada ruta es una función con un decorador. Los parámetros y el tipo de retorno son todo lo que FastAPI necesita:</p>
+  <pre><code>@app.get("/productos/{producto_id}")
+def obtener_producto(producto_id: int) -&gt; ProductoOut:
+    if producto_id not in productos:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    return productos[producto_id]
+
+@app.post("/productos", status_code=status.HTTP_201_CREATED)
+def crear_producto(datos: ProductoIn, response: Response) -&gt; ProductoOut:
+    ...</code></pre>
+
+  <p>Se ejecuta desde la carpeta de la etapa, con el entorno virtual activado:</p>
+  <pre><code>fastapi dev main.py        # servidor con recarga automática en http://127.0.0.1:8000
+python ../01_http/cliente.py   # en otra terminal: los casos del módulo 01 contra FastAPI</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>
+    La etapa 02 conserva el contrato HTTP de la etapa 01, y por eso <code>cliente.py</code> funciona sin cambios.
+    La única diferencia visible es que los datos inválidos reciben 422 en lugar de 400. Lo que todavía falta lo
+    resuelven los módulos siguientes (<strong>Tabla 3</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Limitación de la etapa 02</th><th>Por qué es un problema</th><th>Módulo que la resuelve</th></tr></thead>
+      <tbody>
+        <tr><td>Todo está en un solo archivo</td><td>Con ventas, usuarios y reportes, el archivo crece sin orden y las reglas del negocio se mezclan con HTTP</td><td>03</td></tr>
+        <tr><td>Los datos viven en un diccionario</td><td>Se pierden con cada reinicio y no se comparten entre dos servidores</td><td>04 y 05</td></tr>
+        <tr><td>El token es un texto fijo</td><td>Cualquiera que lo lea en el código puede borrar productos, y no identifica a ninguna persona</td><td>06</td></tr>
+        <tr><td>Solo se prueba con <code>/docs</code> o con <code>cliente.py</code></td><td>La cajera necesita una pantalla</td><td>08 y 09</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 3. Limitaciones de la etapa 02 y módulo donde se resuelve cada una.</figcaption>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: qué hace FastAPI con cada petición</h2>
+  <p>
+    Toda petición atraviesa las mismas cinco etapas, marcadas arriba de la animación. El código de la derecha es
+    <code>main.py</code> con su numeración real; las líneas resaltadas son las que intervienen en cada paso. Las
+    respuestas son las que devolvió el servidor al probarlo, salvo la fecha.
+  </p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="consulta" aria-pressed="true">GET /productos?unidad=kg</button>
+      <button type="button" class="escenario" data-escenario="tipo" aria-pressed="false">GET /productos/abc</button>
+      <button type="button" class="escenario" data-escenario="crear" aria-pressed="false">POST válido</button>
+      <button type="button" class="escenario" data-escenario="invalido" aria-pressed="false">POST inválido</button>
+      <button type="button" class="escenario" data-escenario="token" aria-pressed="false">DELETE sin token</button>
+    </div>
+
+    <div class="etapas" id="etapas">
+      <span class="etapa" data-clave="uvicorn">1. Uvicorn recibe</span><span class="flecha">→</span>
+      <span class="etapa" data-clave="ruteo">2. Ruteo</span><span class="flecha">→</span>
+      <span class="etapa" data-clave="validacion">3. Validación</span><span class="flecha">→</span>
+      <span class="etapa" data-clave="funcion">4. Tu función</span><span class="flecha">→</span>
+      <span class="etapa" data-clave="respuesta">5. Respuesta</span>
+    </div>
+
+    <div class="escena escena-dividida">
+      <div>
+        <p class="detalle-titulo" id="mensaje-titulo"></p>
+        <pre class="envolver"><code id="mensaje"></code></pre>
+      </div>
+      <div>
+        <p class="detalle-titulo">main.py (líneas 21 a 89)</p>
+        <pre class="codigo-alto"><code id="codigo-main"></code></pre>
+      </div>
+    </div>
+
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>«La ejecución de scripts está deshabilitada» al activar el entorno.</strong></p>
+    <p>Windows PowerShell bloquea por defecto los scripts como <code>Activate.ps1</code>. Se puede habilitar para el usuario con <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>, o evitar la activación y usar la ruta completa: <code>.venv\Scripts\fastapi.exe dev main.py</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>El puerto 8000 está ocupado.</strong></p>
+    <p>Si el servidor de la etapa 01 sigue abierto en otra terminal, Uvicorn no puede usar el puerto y muestra un error de dirección en uso. Se cierra el otro servidor con <code>Ctrl+C</code> o se elige otro puerto con <code>fastapi dev main.py --port 8001</code>.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Olvidar la anotación de tipo.</strong></p>
+    <p>Un parámetro sin tipo se recibe como texto y no se valida. <code>def obtener_producto(producto_id)</code> recibiría <code>"1"</code> en lugar de <code>1</code>, y la búsqueda en el diccionario fallaría con un 404 engañoso.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Esperar que los datos sobrevivan a la recarga.</strong></p>
+    <p><code>fastapi dev</code> reinicia el proceso al guardar un archivo, y con él se reinicia el diccionario. No es un error de FastAPI: los datos en memoria duran lo que dura el proceso.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Llamar <code>fastapi.py</code> a un archivo propio.</strong></p>
+    <p>Python buscaría <code>from fastapi import FastAPI</code> en ese archivo en lugar de la librería, y fallaría con un error de importación difícil de entender.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Levantá la etapa 02 y ejecutá <code>python ../01_http/cliente.py</code>. ¿Qué caso responde distinto que en la etapa 01? ¿Qué información extra trae la respuesta?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>El caso 4 responde 422 en lugar de 400. Cada error de la lista trae el campo (<code>loc</code>), el tipo de regla que falló, un mensaje, el valor recibido y, a veces, el límite (<code>ctx</code>, por ejemplo <code>{"gt": 0}</code>). La etapa 01 solo devolvía textos.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Agregá la ruta <code>GET /productos/buscar?q=queso</code> que devuelva los productos cuyo nombre contenga <code>q</code>. Escribila <em>después</em> de <code>obtener_producto</code> y probala. ¿Qué responde y por qué? ¿Cómo se arregla?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Responde 422: FastAPI prueba las rutas en el orden en que se declararon, y <code>/productos/buscar</code> coincide primero con <code>/productos/{producto_id}</code>. Como <code>"buscar"</code> no es un entero, falla la validación. Se arregla declarando <code>/productos/buscar</code> antes, o mejor, agregando el parámetro <code>q</code> a <code>GET /productos</code>, que es la forma REST de filtrar una colección.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> En <code>/docs</code>, creá un producto con precio <code>"12.345"</code>. ¿Qué pasa y qué línea de <code>main.py</code> lo decide?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Responde 422 porque el precio tiene 3 decimales. Lo decide <code>decimal_places=2</code> en el <code>Field</code> del precio, en la línea 30.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Cambiá <code>producto_id: int</code> por <code>producto_id: str</code> en <code>obtener_producto</code> y pedí <code>/productos/1</code>. ¿Qué responde ahora y por qué?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Responde 404: el id llega como el texto <code>"1"</code> y las claves del diccionario son enteros, así que <code>"1" not in productos</code> es verdadero. El tipo anotado no es decorativo: FastAPI convierte el valor según ese tipo.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>5.</strong> Implementá <code>PATCH /productos/{producto_id}</code> para cambiar solo algunos campos. Pista: un schema <code>ProductoPatch</code> con todos los campos opcionales y <code>datos.model_dump(exclude_unset=True)</code>.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>class ProductoPatch(BaseModel):
+    nombre: str | None = Field(default=None, min_length=1, max_length=80)
+    unidad: Literal["kg", "unidad"] | None = None
+    precio: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
+
+@app.patch("/productos/{producto_id}")
+def modificar_producto(producto_id: int, datos: ProductoPatch) -&gt; ProductoOut:
+    if producto_id not in productos:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    cambios = datos.model_dump(exclude_unset=True)   # solo los campos que se enviaron
+    productos[producto_id] = productos[producto_id].model_copy(update=cambios)
+    return productos[producto_id]</code></pre>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://fastapi.tiangolo.com/es/virtual-environments/">FastAPI: entornos virtuales</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/first-steps/">FastAPI: primeros pasos</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/path-params/">FastAPI: parámetros de ruta</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/query-params/">FastAPI: parámetros de consulta</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/body/">FastAPI: cuerpo de la petición</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/handling-errors/">FastAPI: manejo de errores</a></li>
+    <li><a href="https://docs.pydantic.dev/latest/concepts/models/">Pydantic: modelos (en inglés)</a></li>
+    <li><a href="https://www.uvicorn.org/">Uvicorn (en inglés)</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="01_http_rest.html">← Anterior: Módulo 01</a> ·
+    <a href="03_fastapi_estructurado.html">Siguiente: Módulo 03, FastAPI estructurado →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // Copia de main.py, líneas 21 a 89 (la numeración se conserva en la animación).
+  const MAIN_PY = `app = FastAPI(title="Punto Lácteo · etapa 02", version="0.2.0")
+
+
+# ---------- Schemas: la forma de los datos que entran y salen ----------
+
+class ProductoIn(BaseModel):
+    """Lo que el cliente envía para crear un producto."""
+    nombre: str = Field(min_length=1, max_length=80)
+    unidad: Literal["kg", "unidad"]
+    precio: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+
+
+class ProductoOut(ProductoIn):
+    """Lo que el servidor devuelve: los mismos campos más el id asignado."""
+    id: int
+
+
+# ---------- "Base de datos" en memoria, igual que en la etapa 01 ----------
+
+productos: dict[int, ProductoOut] = {
+    1: ProductoOut(id=1, nombre="Queso cremoso", unidad="kg", precio=Decimal("12500.00")),
+    2: ProductoOut(id=2, nombre="Leche entera 1 L", unidad="unidad", precio=Decimal("1450.00")),
+    3: ProductoOut(id=3, nombre="Salame milán", unidad="kg", precio=Decimal("18900.00")),
+}
+proximo_id = 4
+
+
+# ---------- Rutas: cada decorador asocia un método y una ruta con una función ----------
+
+@app.get("/productos")
+def listar_productos(unidad: Literal["kg", "unidad"] | None = None) -> list[ProductoOut]:
+    """Lista los productos. El parámetro de consulta ?unidad=kg filtra por unidad."""
+    if unidad is None:
+        return list(productos.values())
+    return [producto for producto in productos.values() if producto.unidad == unidad]
+
+
+@app.get("/productos/{producto_id}")
+def obtener_producto(producto_id: int) -> ProductoOut:
+    """Devuelve un producto por su id."""
+    if producto_id not in productos:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    return productos[producto_id]
+
+
+@app.post("/productos", status_code=status.HTTP_201_CREATED)
+def crear_producto(datos: ProductoIn, response: Response) -> ProductoOut:
+    """Crea un producto. Si el cuerpo no cumple ProductoIn, FastAPI responde 422 sin ejecutar esto."""
+    global proximo_id
+    producto = ProductoOut(id=proximo_id, **datos.model_dump())
+    productos[producto.id] = producto
+    proximo_id += 1
+    response.headers["Location"] = f"/productos/{producto.id}"
+    return producto
+
+
+@app.delete("/productos/{producto_id}", status_code=status.HTTP_204_NO_CONTENT)
+def borrar_producto(producto_id: int, authorization: Annotated[str | None, Header()] = None) -> None:
+    """Borra un producto. Exige el header Authorization: Bearer <token>."""
+    if authorization is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Falta el header Authorization: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if authorization != f"Bearer {TOKEN_DE_PRUEBA}":
+        raise HTTPException(status_code=401, detail="Token inválido", headers={"WWW-Authenticate": "Bearer"})
+    if productos.pop(producto_id, None) is None:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")`;
+
+  const NINGUNA = [0]; // atenúa todo el código: la función no se ejecuta
+  const CABECERA_RESPUESTA = "date: Tue, 03 Nov 2026 03:35:51 GMT\nserver: uvicorn";
+
+  // Paso 1, igual para todos los escenarios.
+  function pasoUvicorn(peticion) {
+    return {
+      titulo: "Uvicorn recibe la petición",
+      texto: "<p>Uvicorn es el programa servidor: escucha el puerto 8000, recibe los bytes y se los entrega a la aplicación <code>app</code> de la línea 21. Cumple el papel que tenía <code>ThreadingHTTPServer</code> en la etapa 01.</p>",
+      etapa: "uvicorn", lineas: [21],
+      mensaje: { titulo: "Petición recibida (resumida)", texto: peticion },
+    };
+  }
+
+  const ESCENARIOS = {
+    consulta: [
+      pasoUvicorn("GET /productos?unidad=kg HTTP/1.1\nHost: 127.0.0.1:8000\nAccept: application/json"),
+      {
+        titulo: "FastAPI busca la ruta",
+        texto: "<p>Al arrancar, FastAPI recorrió los decoradores y armó una tabla de rutas. <code>GET /productos</code> coincide con la línea 50. Lo que va después del <code>?</code> no forma parte de la ruta: son parámetros de consulta.</p>",
+        etapa: "ruteo", lineas: [50],
+      },
+      {
+        titulo: "Valida el parámetro de consulta",
+        texto: "<p>La firma declara <code>unidad: Literal[\"kg\", \"unidad\"] | None = None</code>. Como <code>unidad</code> no aparece en la ruta, FastAPI la busca después del <code>?</code>, comprueba que valga <code>kg</code> o <code>unidad</code> y se la pasa a la función. Con <code>?unidad=litro</code> respondería 422 sin ejecutar nada.</p>",
+        etapa: "validacion", lineas: [51],
+      },
+      {
+        titulo: "Se ejecuta tu función",
+        texto: "<p>Recién ahora corre el código propio: filtra la lista y se queda con los productos por kg. La función no lee la petición ni arma JSON: recibe valores de Python y devuelve valores de Python.</p>",
+        etapa: "funcion", lineas: [53, 55],
+      },
+      {
+        titulo: "FastAPI arma la respuesta",
+        texto: "<p>La anotación <code>-&gt; list[ProductoOut]</code> le dice a FastAPI qué forma tiene la salida. FastAPI la valida, la convierte a JSON (los <code>Decimal</code> pasan a texto) y Uvicorn la envía con 200.</p>",
+        etapa: "respuesta", lineas: [51],
+        mensaje: {
+          titulo: "Respuesta enviada",
+          texto: `HTTP/1.1 200 OK\n${CABECERA_RESPUESTA}\ncontent-length: 137\ncontent-type: application/json\n\n[{"nombre":"Queso cremoso","unidad":"kg","precio":"12500.00","id":1},{"nombre":"Salame milán","unidad":"kg","precio":"18900.00","id":3}]`,
+        },
+      },
+    ],
+
+    tipo: [
+      pasoUvicorn("GET /productos/abc HTTP/1.1\nHost: 127.0.0.1:8000\nAccept: application/json"),
+      {
+        titulo: "La ruta coincide",
+        texto: "<p><code>/productos/abc</code> coincide con el patrón <code>/productos/{producto_id}</code> de la línea 58. Para el ruteo, <code>abc</code> es un texto válido en esa posición.</p>",
+        etapa: "ruteo", lineas: [58],
+      },
+      {
+        titulo: "El tipo no coincide",
+        texto: "<p>La firma dice <code>producto_id: int</code>. <code>abc</code> no se puede convertir a entero, así que FastAPI corta acá con un error 422.</p>",
+        etapa: "validacion", lineas: [59],
+      },
+      {
+        titulo: "Tu función no se ejecuta",
+        texto: "<p>Ninguna línea de <code>obtener_producto</code> corre. En la etapa 01, esta comprobación había que escribirla a mano, y la expresión regular <code>\\d+</code> la hacía de forma indirecta.</p>",
+        etapa: "funcion", lineas: NINGUNA,
+      },
+      {
+        titulo: "FastAPI responde 422",
+        texto: "<p>El error dice dónde está el problema (<code>loc: [\"path\", \"producto_id\"]</code>), qué regla falló (<code>int_parsing</code>) y qué valor llegó (<code>input</code>). Esa respuesta no está escrita en <code>main.py</code>: sale de la anotación de tipo.</p>",
+        etapa: "respuesta", lineas: [59],
+        mensaje: {
+          titulo: "Respuesta enviada",
+          texto: `HTTP/1.1 422 Unprocessable Entity\n${CABECERA_RESPUESTA}\ncontent-length: 156\ncontent-type: application/json\n\n{"detail":[{"type":"int_parsing","loc":["path","producto_id"],"msg":"Input should be a valid integer, unable to parse string as an integer","input":"abc"}]}`,
+        },
+      },
+    ],
+
+    crear: [
+      pasoUvicorn('POST /productos HTTP/1.1\nHost: 127.0.0.1:8000\nContent-Type: application/json\nContent-Length: 72\n\n{"nombre": "Yogur bebible 1 L", "unidad": "unidad", "precio": "2300.00"}'),
+      {
+        titulo: "FastAPI busca la ruta",
+        texto: "<p><code>POST /productos</code> coincide con el decorador de la línea 66. Las rutas <code>GET /productos</code> y <code>POST /productos</code> son distintas aunque compartan el texto: el método también forma parte de la ruta.</p>",
+        etapa: "ruteo", lineas: [66],
+      },
+      {
+        titulo: "Valida el cuerpo contra ProductoIn",
+        texto: "<p><code>datos: ProductoIn</code> es un modelo de Pydantic, así que FastAPI lee el cuerpo JSON y lo valida contra las líneas 26 a 30. El precio llega como texto y se convierte en <code>Decimal</code>. <code>response: Response</code> no sale de la petición: es la respuesta en construcción, que la función usa para agregar un header.</p>",
+        etapa: "validacion", lineas: [26, 28, 29, 30, 67],
+      },
+      {
+        titulo: "Se ejecuta tu función",
+        texto: "<p>La función recibe un objeto <code>ProductoIn</code> ya validado, crea el <code>ProductoOut</code> con el id 4, lo guarda y agrega el header <code>Location</code>. No hay ningún <code>json.loads</code> ni validación manual.</p>",
+        etapa: "funcion", lineas: [69, 70, 71, 72, 73, 74],
+      },
+      {
+        titulo: "FastAPI responde 201",
+        texto: "<p>El código 201 sale de <code>status_code=status.HTTP_201_CREATED</code> en el decorador, y el cuerpo, del <code>ProductoOut</code> devuelto. El <code>id</code> aparece al final porque <code>ProductoOut</code> hereda los campos de <code>ProductoIn</code> y después agrega el suyo.</p>",
+        etapa: "respuesta", lineas: [66, 67],
+        mensaje: {
+          titulo: "Respuesta enviada",
+          texto: `HTTP/1.1 201 Created\n${CABECERA_RESPUESTA}\ncontent-length: 74\ncontent-type: application/json\nlocation: /productos/4\n\n{"nombre":"Yogur bebible 1 L","unidad":"unidad","precio":"2300.00","id":4}`,
+        },
+      },
+    ],
+
+    invalido: [
+      pasoUvicorn('POST /productos HTTP/1.1\nHost: 127.0.0.1:8000\nContent-Type: application/json\nContent-Length: 49\n\n{"nombre": "", "unidad": "litro", "precio": "-5"}'),
+      {
+        titulo: "FastAPI busca la ruta",
+        texto: "<p>La ruta es la misma que al crear un producto válido: <code>POST /productos</code>, línea 66.</p>",
+        etapa: "ruteo", lineas: [66],
+      },
+      {
+        titulo: "Fallan las tres reglas",
+        texto: "<p>Pydantic revisa todos los campos y junta todos los errores: el nombre está vacío (<code>min_length=1</code>), la unidad no es <code>kg</code> ni <code>unidad</code> y el precio no es mayor que cero (<code>gt=0</code>).</p>",
+        etapa: "validacion", lineas: [28, 29, 30],
+      },
+      {
+        titulo: "Tu función no se ejecuta",
+        texto: "<p><code>crear_producto</code> nunca recibe datos inválidos. Por eso su cuerpo no tiene ni una validación.</p>",
+        etapa: "funcion", lineas: NINGUNA,
+      },
+      {
+        titulo: "FastAPI responde 422",
+        texto: "<p>La respuesta lista los tres errores. Cada uno indica el campo en <code>loc</code>, y algunos el límite que no se cumplió en <code>ctx</code>. Con esta lista, una pantalla puede marcar en rojo cada campo.</p>",
+        etapa: "respuesta", lineas: [28, 29, 30],
+        mensaje: {
+          titulo: "Respuesta enviada",
+          texto: `HTTP/1.1 422 Unprocessable Entity\n${CABECERA_RESPUESTA}\ncontent-length: 405\ncontent-type: application/json\n\n{"detail":[{"type":"string_too_short","loc":["body","nombre"],"msg":"String should have at least 1 character","input":"","ctx":{"min_length":1}},{"type":"literal_error","loc":["body","unidad"],"msg":"Input should be 'kg' or 'unidad'","input":"litro","ctx":{"expected":"'kg' or 'unidad'"}},{"type":"greater_than","loc":["body","precio"],"msg":"Input should be greater than 0","input":"-5","ctx":{"gt":0}}]}`,
+        },
+      },
+    ],
+
+    token: [
+      pasoUvicorn("DELETE /productos/2 HTTP/1.1\nHost: 127.0.0.1:8000\nAccept: application/json"),
+      {
+        titulo: "FastAPI busca la ruta",
+        texto: "<p><code>DELETE /productos/2</code> coincide con la línea 77.</p>",
+        etapa: "ruteo", lineas: [77],
+      },
+      {
+        titulo: "Lee el header Authorization",
+        texto: "<p><code>authorization: Annotated[str | None, Header()] = None</code> le pide a FastAPI que lea el header <code>Authorization</code>. Como el parámetro es opcional (<code>= None</code>), que falte no produce un 422: la función se ejecuta y decide.</p>",
+        etapa: "validacion", lineas: [78],
+      },
+      {
+        titulo: "Tu función lanza HTTPException",
+        texto: "<p>El header no está, así que la función lanza <code>HTTPException</code> con 401. No es una falla del programa: es la forma de pedirle a FastAPI que corte ahí y responda con ese código.</p>",
+        etapa: "funcion", lineas: [80, 81, 82, 83, 84, 85],
+      },
+      {
+        titulo: "FastAPI responde 401",
+        texto: "<p>FastAPI atrapa la excepción y arma la respuesta con el <code>detail</code> en JSON y el header <code>WWW-Authenticate</code>. El contenido es el mismo que en la etapa 01.</p>",
+        etapa: "respuesta", lineas: [81, 82, 83, 84, 85],
+        mensaje: {
+          titulo: "Respuesta enviada",
+          texto: `HTTP/1.1 401 Unauthorized\n${CABECERA_RESPUESTA}\nwww-authenticate: Bearer\ncontent-length: 58\ncontent-type: application/json\n\n{"detail":"Falta el header Authorization: Bearer <token>"}`,
+        },
+      },
+    ],
+  };
+
+  // Cada paso sin mensaje propio hereda el último mensaje mostrado de su escenario.
+  for (const pasos of Object.values(ESCENARIOS)) {
+    let ultimo = null;
+    for (const paso of pasos) {
+      if (paso.mensaje) ultimo = paso.mensaje;
+      else paso.mensaje = ultimo;
+    }
+  }
+
+  const raiz = document.getElementById("recorrido");
+  const codigo = document.getElementById("codigo-main");
+
+  function dibujarPaso(paso) {
+    marcarActivos(document.getElementById("etapas"), [paso.etapa]);
+    escribirCodigo(codigo, MAIN_PY, paso.lineas, 21);
+    document.getElementById("mensaje-titulo").textContent = paso.mensaje.titulo;
+    document.getElementById("mensaje").textContent = paso.mensaje.texto;
+  }
+
+  const recorrido = crearRecorrido(raiz, ESCENARIOS.consulta, dibujarPaso);
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

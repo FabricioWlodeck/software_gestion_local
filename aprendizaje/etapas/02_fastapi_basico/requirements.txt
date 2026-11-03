@@ -1,0 +1,2 @@
+# "standard" incluye Uvicorn (el servidor) y el comando `fastapi` para ejecutarlo
+fastapi[standard]

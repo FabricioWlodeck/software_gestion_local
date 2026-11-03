@@ -365,11 +365,90 @@ details[open] summary { margin-bottom: 6px; }
 .nodo.ok rect { fill: var(--ok-suave); stroke: var(--ok); stroke-width: 3; }
 .nodo.error rect { fill: var(--error-suave); stroke: var(--error); stroke-width: 3; }
 
-.paquete { transition: transform 0.7s ease; }
+.paquete { transition: transform 0.7s ease, opacity 0.3s; }
 .paquete rect { fill: var(--acento); }
 .paquete text { fill: var(--sobre-acento); font-size: 13px; font-weight: 600; }
 .paquete.ok rect { fill: var(--ok); }
 .paquete.error rect { fill: var(--error); }
+
+/* ---------- Código con líneas resaltadas (escribirCodigo) ---------- */
+
+.codigo-lineas .linea {
+  display: block;
+  white-space: pre;
+  border-radius: 4px;
+  padding-right: 8px;
+  transition: opacity 0.3s, background 0.3s;
+}
+
+.codigo-lineas .linea::before {
+  content: attr(data-numero);
+  display: inline-block;
+  width: 2.6em;
+  color: var(--texto-suave);
+  user-select: none;
+}
+
+.codigo-lineas .linea.activa { background: var(--resaltado); }
+.codigo-alto { max-height: 420px; overflow-y: auto; }
+.envolver { white-space: pre-wrap; overflow-wrap: anywhere; }
+.codigo-lineas .linea.apagada { opacity: 0.4; }
+
+/* ---------- Etapas de un proceso y árboles de archivos (marcarActivos) ---------- */
+
+.etapas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.etapas .etapa {
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--borde);
+  background: var(--superficie-2);
+  font-size: 0.85rem;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.etapas .flecha { color: var(--texto-suave); font-size: 0.85rem; }
+.etapas .etapa.activo { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+
+.arbol {
+  font-family: var(--fuente-codigo);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  background: var(--codigo-fondo);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 12px 14px;
+  margin: 0;
+  list-style: none;
+}
+
+.arbol li { white-space: pre; }
+.arbol [data-clave] { border-radius: 4px; padding: 0 4px; transition: background 0.3s; }
+.arbol [data-clave].activo { background: var(--resaltado); outline: 2px solid var(--aviso); }
+.arbol .comentario { color: var(--texto-suave); }
+
+.escena-dividida {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 12px;
+}
+
+.escena-dividida pre { margin: 0; }
+
+/* ---------- Tablas animadas (módulo 04) ---------- */
+
+.tabla-animada td.problema { background: var(--error-suave); color: var(--error); font-weight: 600; }
+.tabla-animada td.clave { font-weight: 700; }
+.tabla-animada td.clave::after { content: " 🔑"; font-size: 0.8em; }
+.tabla-animada td.foranea::after { content: " ↗"; color: var(--acento); }
+.tabla-animada caption { text-align: left; font-weight: 700; padding: 4px 0; }
+.tablas-animadas { display: grid; gap: 12px; }
 
 /* ---------- Mensajes HTTP (módulo 01) ---------- */
 
@@ -469,7 +548,7 @@ a.tarjeta:hover { border-color: var(--acento); box-shadow: var(--sombra); }
   body { font-size: 16px; }
   main { padding: 16px 16px 60px; }
   h1 { font-size: 1.6rem; }
-  .mensajes { grid-template-columns: minmax(0, 1fr); }
+  .mensajes, .escena-dividida { grid-template-columns: minmax(0, 1fr); }
   .tarjeta { grid-template-columns: 40px 1fr; }
   .estado { grid-row: auto; grid-column: 2; justify-self: start; }
 }

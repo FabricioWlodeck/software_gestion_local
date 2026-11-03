@@ -96,6 +96,97 @@
     });
   }
 
+  /**
+   * Crea la función que dibuja un diagrama SVG con nodos y un "paquete" que viaja entre ellos.
+   * - svg: elemento <svg> con nodos <g class="nodo" id="n-<nombre>"> y un <g class="paquete">
+   *   que contiene un <rect> y un <text>.
+   * - posiciones: { nombre: [x, y] }, el punto donde se ubica el paquete en cada lugar.
+   * Cada paso puede indicar nodos { nombre: "activo" | "ok" | "error" } y
+   * paquete { en: nombre, etiqueta, tipo?: "ok" | "error" }; sin paquete, se oculta.
+   */
+  function crearDiagrama(svg, posiciones) {
+    const nodos = svg.querySelectorAll(".nodo");
+    const paquete = svg.querySelector(".paquete");
+    const fondo = paquete.querySelector("rect");
+    const texto = paquete.querySelector("text");
+
+    return function dibujar(paso) {
+      nodos.forEach((nodo) => {
+        nodo.classList.remove("activo", "ok", "error");
+        const estado = (paso.nodos || {})[nodo.id.replace(/^n-/, "")];
+        if (estado) nodo.classList.add(estado);
+      });
+
+      if (!paso.paquete) {
+        paquete.style.opacity = "0";
+        return;
+      }
+      paquete.style.opacity = "1";
+      texto.textContent = paso.paquete.etiqueta;
+      const ancho = texto.getComputedTextLength() + 28;
+      fondo.setAttribute("width", ancho);
+      fondo.setAttribute("x", -ancho / 2);
+      paquete.classList.remove("ok", "error");
+      if (paso.paquete.tipo) paquete.classList.add(paso.paquete.tipo);
+      const [x, y] = posiciones[paso.paquete.en];
+      paquete.style.transform = `translate(${x}px, ${y}px)`;
+    };
+  }
+
+  /**
+   * Escribe un código línea por línea dentro de un <code> (con número de línea)
+   * y resalta las líneas indicadas; si hay alguna resaltada, las demás se atenúan.
+   * primeraLinea permite mostrar un fragmento con la numeración real del archivo.
+   * Pasar [0] como lineasActivas atenúa todo (sirve para mostrar código que no se ejecuta).
+   */
+  function escribirCodigo(elemento, texto, lineasActivas = [], primeraLinea = 1) {
+    elemento.replaceChildren();
+    elemento.classList.add("codigo-lineas");
+    texto.split("\n").forEach((linea, i) => {
+      const numero = primeraLinea + i;
+      const span = document.createElement("span");
+      span.className = "linea";
+      if (lineasActivas.length) span.classList.add(lineasActivas.includes(numero) ? "activa" : "apagada");
+      span.dataset.numero = numero;
+      span.textContent = linea || " ";
+      elemento.append(span);
+    });
+
+    // Si el bloque tiene altura limitada, se desplaza solo el bloque (no la página) hasta la primera línea resaltada.
+    const primera = elemento.querySelector(".linea.activa");
+    const contenedor = elemento.closest("pre");
+    if (primera && contenedor && contenedor.scrollHeight > contenedor.clientHeight) {
+      const destino = primera.getBoundingClientRect().top - contenedor.getBoundingClientRect().top + contenedor.scrollTop - 48;
+      contenedor.scrollTo({ top: destino, behavior: "smooth" });
+    }
+  }
+
+  /**
+   * Marca como "activo" los elementos con data-clave incluidos en `claves`
+   * (por ejemplo, archivos de un árbol o etapas de un proceso) y desmarca el resto.
+   */
+  function marcarActivos(contenedor, claves = []) {
+    contenedor.querySelectorAll("[data-clave]").forEach((elemento) => {
+      elemento.classList.toggle("activo", claves.includes(elemento.dataset.clave));
+    });
+  }
+
+  /** Muestra el título y el código del panel de detalle de un recorrido. */
+  function mostrarDetalle(raiz, detalle) {
+    const contenedor = raiz.querySelector(".detalle");
+    if (!detalle) {
+      contenedor.hidden = true;
+      return;
+    }
+    contenedor.hidden = false;
+    contenedor.querySelector(".detalle-titulo").textContent = detalle.titulo;
+    contenedor.querySelector("code").textContent = detalle.codigo;
+  }
+
   window.crearRecorrido = crearRecorrido;
   window.conectarEscenarios = conectarEscenarios;
+  window.crearDiagrama = crearDiagrama;
+  window.escribirCodigo = escribirCodigo;
+  window.marcarActivos = marcarActivos;
+  window.mostrarDetalle = mostrarDetalle;
 })();
