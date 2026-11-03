@@ -458,6 +458,17 @@ details[open] summary { margin-bottom: 6px; }
 .tablas-animadas { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .tablas-animadas .tabla { margin: 0; }
 
+/* ---------- Anatomía de un JWT (módulo 06) ---------- */
+
+.jwt { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.95rem; }
+.jwt span { border-radius: 4px; padding: 1px 0; transition: background 0.3s, opacity 0.3s; }
+.jwt .jwt-encabezado { color: var(--error); }
+.jwt .jwt-contenido { color: var(--acento); }
+.jwt .jwt-firma { color: var(--ok); }
+.jwt .jwt-punto { color: var(--texto); font-weight: 700; }
+.jwt .actual { background: var(--resaltado); }
+.jwt .apagada { opacity: 0.35; }
+
 /* ---------- Mensajes HTTP (módulo 01) ---------- */
 
 .mensajes {

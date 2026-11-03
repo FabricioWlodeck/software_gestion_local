@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Seguridad</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 06</span><span>100 min</span><span>Código: <code>aprendizaje/etapas/06_seguridad</code></span></p>
+    <h1>Seguridad: contraseñas, tokens y roles</h1>
+    <p>Cómo se guardan las contraseñas, cómo el servidor sabe quién hace cada petición, qué puede hacer cada rol y en qué se diferencian hash, cifrado y firma.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animaciones</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación</a></li>
+    </ul>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    En la etapa 05, la caja envía <code>"usuario_id": 2</code> y el servidor le cree. Cualquiera que conozca la API
+    puede registrar ventas a nombre de otra persona, ver las métricas del negocio o borrar productos con el token
+    fijo que está escrito en el código. El sistema real exige lo contrario: que la dueña vea todo, que un empleado
+    pueda cobrar pero no ver las ganancias, y que quede registro de quién hizo cada cosa.
+  </p>
+  <p>
+    Para eso hacen falta tres piezas. La primera son contraseñas guardadas de forma que ni quien robe la base pueda
+    leerlas. La segunda es una manera de que, después de iniciar sesión, cada petición demuestre quién la hace sin
+    enviar la contraseña de nuevo. La tercera son reglas que digan qué puede hacer cada rol.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Hash, cifrado y firma: tres herramientas distintas</h3>
+  <p>
+    En el uso cotidiano, todo esto se llama «encriptar», pero son tres operaciones con propósitos distintos
+    (<strong>Tabla 1</strong>), y confundirlas lleva a errores graves.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Operación</th><th>Qué hace</th><th>¿Se puede revertir?</th><th>¿Usa clave?</th><th>Uso en Punto Lácteo</th></tr></thead>
+      <tbody>
+        <tr><td>Hash</td><td>Convierte un texto en una huella de largo fijo. La misma entrada da siempre una huella verificable.</td><td>No</td><td>No (usa una sal aleatoria)</td><td>Guardar contraseñas (Argon2)</td></tr>
+        <tr><td>Cifrado</td><td>Transforma un texto para que solo lo lea quien tenga la clave.</td><td>Sí, con la clave</td><td>Sí</td><td>Proteger los datos en tránsito (HTTPS)</td></tr>
+        <tr><td>Firma</td><td>Agrega a un mensaje un sello que prueba quién lo emitió y que nadie lo modificó. El mensaje sigue legible.</td><td>No hace falta: no oculta nada</td><td>Sí</td><td>Tokens de sesión (JWT con HMAC-SHA256)</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Diferencias entre hash, cifrado y firma.</figcaption>
+  </div>
+
+  <h3>2.2 Contraseñas: se guarda el hash, nunca la contraseña</h3>
+  <p>
+    La base nunca guarda <code>bruno123</code>. Guarda el resultado de pasarla por una función de hash. Al iniciar
+    sesión, el servidor calcula el hash de lo que escribió el usuario con los mismos parámetros y compara. Si alguien
+    roba la base, obtiene hashes, y de un hash no se puede volver a la contraseña.
+  </p>
+  <p>
+    Lo que sí puede hacer un atacante es probar contraseñas posibles hasta encontrar una que dé el mismo hash. Por eso
+    no se usan funciones rápidas como SHA-256: una placa de video calcula miles de millones por segundo. Se usa
+    <strong>Argon2</strong>, diseñada para ser lenta y consumir memoria a propósito. Un hash de la etapa se ve así:
+  </p>
+  <pre class="envolver"><code>$argon2id$v=19$m=65536,t=3,p=4$SMxRB3HHgFEyJ7AJ4bp2dw$N4pijPt6b57bq4PCreyJDD8KCLHLOGebOqw5KSgBpe0</code></pre>
+  <p>
+    El texto guarda todo lo necesario para verificar: el algoritmo (<code>argon2id</code>), la versión, el costo
+    (<code>m=65536</code> KiB de memoria, <code>t=3</code> pasadas y <code>p=4</code> hilos), la <strong>sal</strong>
+    y el hash. La sal es un valor aleatorio distinto para cada contraseña. Por eso la misma contraseña da hashes
+    distintos cada vez (<code>explorar_seguridad.py</code> lo muestra), y un atacante no puede usar tablas
+    precalculadas de hashes de contraseñas comunes.
+  </p>
+
+  <h3>2.3 Autenticación y autorización</h3>
+  <p>
+    La <strong>autenticación</strong> responde «¿quién sos?» y su fracaso es un 401. La <strong>autorización</strong>
+    responde «¿podés hacer esto?» y su fracaso es un 403. Bruno, con un token válido, está autenticado. Cuando intenta
+    ver las ventas, no está autorizado.
+  </p>
+
+  <h3>2.4 Inicio de sesión con OAuth2</h3>
+  <p>
+    La etapa sigue el flujo de contraseña de OAuth2 (<em>Open Authorization 2.0</em> o Autorización Abierta 2.0), que
+    es el que muestra la documentación de FastAPI. El cliente envía usuario y contraseña <strong>una sola vez</strong>
+    a <code>POST /auth/token</code>, como formulario (<code>username=...&amp;password=...</code>). Si son correctos, el
+    servidor responde con un token: <code>{"access_token": "eyJ...", "token_type": "bearer"}</code>. A partir de ahí,
+    cada petición lleva el header <code>Authorization: Bearer &lt;token&gt;</code>, y la contraseña no vuelve a viajar.
+  </p>
+  <p>
+    <em>Bearer</em> significa «portador»: quien porta el token, pasa. HTTP no tiene memoria (módulo 01), así que el
+    token viaja en cada petición. En FastAPI, <code>OAuth2PasswordBearer(tokenUrl="auth/token")</code> es una
+    dependencia que lee ese header y le indica a <code>/docs</code> dónde iniciar sesión: por eso aparece el botón
+    <strong>Authorize</strong>.
+  </p>
+
+  <h3>2.5 JWT: un token que se verifica sin consultar nada</h3>
+  <p>
+    El token es un JWT (<em>JSON Web Token</em> o Token Web JSON): tres partes separadas por puntos. El
+    <strong>encabezado</strong> dice qué algoritmo se usó. El <strong>contenido</strong> (<em>payload</em>) trae los
+    datos, llamados <em>claims</em>: <code>sub</code> (el id del usuario), <code>rol</code>, <code>iat</code> (cuándo se
+    emitió) y <code>exp</code> (cuándo vence). La <strong>firma</strong> es un HMAC-SHA256 (<em>Hash-based Message
+    Authentication Code</em> o Código de Autenticación de Mensajes basado en Hash) del encabezado y el contenido,
+    calculado con la <code>CLAVE_SECRETA</code> del servidor.
+  </p>
+  <p>
+    Las dos primeras partes están en Base64URL, una codificación, no un cifrado: cualquiera puede leerlas. Lo que nadie
+    puede hacer sin la clave es <em>modificarlas</em> y calcular una firma válida. Por eso el servidor confía en el
+    contenido sin guardar las sesiones en ningún lado. La contracara es que un token no se puede anular antes de que
+    venza; por eso dura un turno (8 horas) y no semanas. La etapa, además, busca al usuario en la base en cada
+    petición y usa el rol guardado ahí: si la dueña le quita un permiso a alguien, vale desde la petición siguiente.
+  </p>
+
+  <h3>2.6 Dónde guarda el token el frontend</h3>
+  <p>
+    El material guarda el token en <code>localStorage</code> (módulo 09), como hace la documentación oficial. Tiene un
+    riesgo: si un atacante logra ejecutar JavaScript en la página, mediante un ataque XSS (<em>Cross-Site
+    Scripting</em> o Secuencia de Comandos en Sitios Cruzados), puede leerlo. La alternativa es una cookie
+    <code>httpOnly</code>, que JavaScript no puede leer y el navegador envía sola. Esa cookie protege contra XSS, pero
+    exige defenderse de otro ataque, CSRF (<em>Cross-Site Request Forgery</em> o Falsificación de Peticiones en Sitios
+    Cruzados). Para el proyecto real conviene evaluarla; para aprender, el header <code>Authorization</code> deja ver
+    todo el mecanismo.
+  </p>
+
+  <h3>2.7 HTTPS: cifrado en tránsito</h3>
+  <p>
+    En las etapas, las peticiones viajan sin cifrar por <code>127.0.0.1</code>, dentro de la misma PC. En el servidor de
+    la facultad, la contraseña del formulario y el token cruzarían la red a la vista de cualquiera que la escuche. HTTPS
+    cifra cada mensaje con TLS (<em>Transport Layer Security</em> o Seguridad de la Capa de Transporte). Lo habitual es
+    que un proxy inverso (como nginx) atienda HTTPS con un certificado y le pase las peticiones a Uvicorn. Sin HTTPS,
+    nada de este módulo protege de verdad.
+  </p>
+
+  <h3>2.8 Roles</h3>
+  <p>
+    Los permisos se asignan por rol: RBAC (<em>Role-Based Access Control</em> o Control de Acceso Basado en Roles). La
+    etapa tiene dos roles fijos, <code>duenio</code> y <code>empleado</code>. La dependencia <code>requerir_rol</code> es
+    una fábrica: <code>requerir_rol("duenio")</code> devuelve una función que FastAPI ejecuta antes de la ruta y que
+    responde 403 si el rol no coincide. Cada ruta declara en su firma quién puede usarla (<strong>Tabla 2</strong>).
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Ruta</th><th>Sin token</th><th>Empleado</th><th>Dueño</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /auth/token</code></td><td>Abierta</td><td>Abierta</td><td>Abierta</td></tr>
+        <tr><td><code>GET /productos</code>, <code>GET /auth/yo</code></td><td>401</td><td>Permitida</td><td>Permitida</td></tr>
+        <tr><td><code>POST /ventas</code></td><td>401</td><td>Permitida (a su nombre)</td><td>Permitida (a su nombre)</td></tr>
+        <tr><td><code>GET /ventas</code></td><td>401</td><td>403</td><td>Permitida</td></tr>
+        <tr><td><code>POST /productos</code>, <code>DELETE /productos/{id}</code></td><td>401</td><td>403</td><td>Permitida</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Permisos de cada ruta según quién la pide.</figcaption>
+  </div>
+
+  <h3>2.9 Secretos</h3>
+  <p>
+    <code>CLAVE_SECRETA</code> es el dato más sensible del backend: quien la conozca puede fabricar un token de la
+    dueña. Se genera al azar (<code>secrets.token_hex(32)</code>), se pasa por variable de entorno y nunca se sube a
+    git. Lo mismo vale para la contraseña de la base. El módulo 10 los reúne en un archivo <code>.env</code>.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>Hash y token en <code>app/seguridad.py</code>, sin HTTP ni base de datos:</p>
+  <pre><code>hasheador = PasswordHash.recommended()   # Argon2
+
+def hashear(contrasena: str) -&gt; str:
+    return hasheador.hash(contrasena)
+
+def crear_token(usuario_id: int, rol: str) -&gt; str:
+    ahora = datetime.now(UTC)
+    contenido = {"sub": str(usuario_id), "rol": rol, "iat": ahora,
+                 "exp": ahora + timedelta(minutes=MINUTOS_DE_SESION)}
+    return jwt.encode(contenido, CLAVE_SECRETA, algorithm=ALGORITMO_JWT)</code></pre>
+
+  <p>Las dos guardias en <code>app/dependencies.py</code>:</p>
+  <pre><code>esquema_oauth2 = OAuth2PasswordBearer(tokenUrl="auth/token")
+
+def obtener_usuario_actual(token: Annotated[str, Depends(esquema_oauth2)], sesion: SesionDep) -&gt; Usuario:
+    try:
+        contenido = leer_token(token)          # verifica firma y vencimiento
+    except jwt.InvalidTokenError:
+        raise no_autenticado                   # 401
+    ...
+
+def requerir_rol(*roles: str):
+    def verificar_rol(usuario: UsuarioActualDep) -&gt; Usuario:
+        if usuario.rol not in roles:
+            raise HTTPException(status_code=403, detail="No tenés permiso para esta acción")
+        return usuario
+    return verificar_rol</code></pre>
+
+  <p>Cada ruta declara quién puede usarla. La venta queda a nombre del usuario del token:</p>
+  <pre><code>@router.post("", status_code=status.HTTP_201_CREATED)
+def registrar_venta(venta: VentaIn, servicio: ServicioVentasDep, usuario: UsuarioActualDep) -&gt; VentaOut:
+    return servicio.registrar(venta, usuario.id)
+
+@router.get("")
+def listar_ventas(servicio: ServicioVentasDep, duenio: SoloDuenioDep) -&gt; list[VentaOut]:
+    return servicio.listar()</code></pre>
+
+  <p>Preparación y prueba desde la carpeta de la etapa:</p>
+  <pre><code>alembic upgrade head          # aplica solo la migración 0002 (columna password_hash)
+python -m app.semilla         # asigna las contraseñas de prueba
+python explorar_seguridad.py  # el hash y el token por dentro
+fastapi dev app/main.py       # y en /docs, el botón Authorize</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Pieza</th><th>Cambio en la etapa 06</th><th>Quién la usa después</th></tr></thead>
+      <tbody>
+        <tr><td>Migraciones</td><td>La <code>0002</code> agrega <code>password_hash</code>; la base de la etapa 05 se actualiza sin perder datos</td><td>El servidor, con <code>alembic upgrade head</code> al desplegar (módulo 10)</td></tr>
+        <tr><td><code>POST /auth/token</code></td><td>Nuevo: devuelve el token</td><td>La pantalla de inicio de sesión (módulo 09)</td></tr>
+        <tr><td><code>GET /auth/yo</code></td><td>Nuevo: devuelve nombre y rol</td><td>El frontend, para mostrar u ocultar opciones según el rol (módulo 09)</td></tr>
+        <tr><td><code>VentaIn</code></td><td>Sin <code>usuario_id</code></td><td>El frontend ya no tiene que decir quién cobra</td></tr>
+        <tr><td><code>CLAVE_SECRETA</code></td><td>Nueva variable de entorno</td><td>El archivo <code>.env</code> del despliegue (módulo 10)</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 3. Qué agrega la etapa 06 y qué módulo lo usa.</figcaption>
+  </div>
+  <div class="nota">
+    <p><strong>Ocultar no es proteger.</strong> En el módulo 09, la pantalla de un empleado no muestra el botón para ver las
+    ventas. Eso mejora la experiencia, pero la protección real es el 403 de esta etapa: cualquiera puede enviar la
+    petición sin usar la pantalla.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animaciones</h2>
+
+  <h3>5.1 Del inicio de sesión a una petición protegida</h3>
+  <p>Cuatro escenarios con los usuarios de prueba. Los primeros pasos son el inicio de sesión; los últimos, una petición a <code>GET /ventas</code>.</p>
+
+  <div class="recorrido" id="recorrido-flujo" tabindex="0">
+    <div class="escenarios" id="escenarios-flujo">
+      <button type="button" class="escenario" data-escenario="ana" aria-pressed="true">Ana ve las ventas (200)</button>
+      <button type="button" class="escenario" data-escenario="bruno" aria-pressed="false">Bruno lo intenta (403)</button>
+      <button type="button" class="escenario" data-escenario="alterado" aria-pressed="false">Token alterado (401)</button>
+      <button type="button" class="escenario" data-escenario="clave" aria-pressed="false">Contraseña incorrecta (401)</button>
+    </div>
+    <div class="escena">
+      <svg class="diagrama" id="diagrama-flujo" viewBox="0 0 960 300" role="img" aria-label="Flujo de inicio de sesión y petición protegida">
+        <line class="linea" x1="180" y1="150" x2="225" y2="150"/>
+        <line class="linea" x1="385" y1="150" x2="425" y2="150"/>
+        <line class="linea" x1="565" y1="150" x2="605" y2="150"/>
+        <line class="linea" x1="765" y1="150" x2="800" y2="150"/>
+        <line class="pista" x1="20" y1="250" x2="940" y2="250"/>
+        <g class="nodo" id="n-navegador"><rect x="20" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="100" y="135" text-anchor="middle">Navegador</text>
+          <text class="sub" x="100" y="157" text-anchor="middle">guarda el token</text>
+          <text class="sub" x="100" y="177" text-anchor="middle">módulo 09</text></g>
+        <g class="nodo" id="n-auth"><rect x="225" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="305" y="135" text-anchor="middle">Inicio de sesión</text>
+          <text class="sub" x="305" y="157" text-anchor="middle">/auth/token</text>
+          <text class="sub" x="305" y="177" text-anchor="middle">Argon2 + JWT</text></g>
+        <g class="nodo" id="n-db"><rect x="425" y="95" width="140" height="110" rx="12"/>
+          <text class="titulo-nodo" x="495" y="135" text-anchor="middle">MariaDB</text>
+          <text class="sub" x="495" y="157" text-anchor="middle">tabla usuario</text>
+          <text class="sub" x="495" y="177" text-anchor="middle">password_hash</text></g>
+        <g class="nodo" id="n-guardia"><rect x="605" y="95" width="160" height="110" rx="12"/>
+          <text class="titulo-nodo" x="685" y="135" text-anchor="middle">Guardias</text>
+          <text class="sub" x="685" y="157" text-anchor="middle">usuario actual (401)</text>
+          <text class="sub" x="685" y="177" text-anchor="middle">rol (403)</text></g>
+        <g class="nodo" id="n-ruta"><rect x="800" y="95" width="140" height="110" rx="12"/>
+          <text class="titulo-nodo" x="870" y="135" text-anchor="middle">Ruta</text>
+          <text class="sub" x="870" y="157" text-anchor="middle">GET /ventas</text></g>
+        <g class="paquete"><rect x="-40" y="-15" width="80" height="30" rx="15"/><text x="0" y="5" text-anchor="middle"></text></g>
+      </svg>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle"><p class="detalle-titulo"></p><pre class="envolver"><code></code></pre></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <h3>5.2 Anatomía de un JWT</h3>
+  <p>El token de Bruno que generó <code>explorar_seguridad.py</code>. Las dos primeras partes se decodifican en tu navegador, sin ninguna clave.</p>
+
+  <div class="recorrido" id="recorrido-jwt" tabindex="0">
+    <div class="escena">
+      <pre class="jwt"><code id="jwt-token"></code></pre>
+      <p class="detalle-titulo" id="jwt-titulo"></p>
+      <pre class="envolver"><code id="jwt-detalle"></code></pre>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Guardar contraseñas en texto plano o con MD5 o SHA-256.</strong></p>
+    <p>Texto plano expone todas las contraseñas con un solo robo. MD5 y SHA-256 son tan rápidos que se prueban miles de millones de contraseñas por segundo. Se usa una función lenta con sal, como Argon2.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Decir qué falló en el inicio de sesión.</strong></p>
+    <p>Responder «el usuario no existe» o «la contraseña es incorrecta» le dice a un atacante qué nombres existen. La etapa responde lo mismo en los dos casos, y además tarda lo mismo: si el usuario no existe, verifica contra un hash ficticio.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Poner datos secretos en el JWT.</strong></p>
+    <p>El contenido se lee con un decodificador de Base64. Nunca lleva contraseñas, ni datos que el usuario no deba ver.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Confiar en el rol que viene en el token sin mirar la base.</strong></p>
+    <p>Si la dueña degrada a un usuario, su token sigue diciendo el rol viejo hasta que venza. La etapa usa el rol de la base, que se consulta en cada petición.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Subir la <code>CLAVE_SECRETA</code> a git.</strong></p>
+    <p>Un repositorio se copia, se comparte y se publica. Quien tenga la clave puede fabricar tokens de cualquier usuario. Si se filtra, se cambia, y todos vuelven a iniciar sesión.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Desplegar sin HTTPS.</strong></p>
+    <p>La contraseña del formulario y el token viajan legibles por la red. Hash, firma y roles no sirven si el token se puede copiar en tránsito.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> Ejecutá <code>python explorar_seguridad.py</code> dos veces. ¿Qué cambia entre una ejecución y otra en los hashes y en el token? ¿Por qué el token cambia aunque el usuario sea el mismo?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Los hashes cambian por la sal aleatoria. El token cambia porque <code>iat</code> y <code>exp</code> dependen del momento en que se crea, y cualquier cambio en el contenido cambia la firma.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Arrancá el servidor con <code>$env:MINUTOS_DE_SESION = "1"</code>, iniciá sesión, esperá dos minutos y hacé una petición con ese token. ¿Qué responde? ¿Qué línea lo decide?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Responde 401 «Token inválido o vencido». <code>jwt.decode</code>, dentro de <code>leer_token</code>, compara <code>exp</code> con la hora actual y lanza <code>ExpiredSignatureError</code>, que es una subclase de <code>InvalidTokenError</code>.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Agregá <code>GET /ventas/mias</code>, para que cada empleado vea solo sus propias ventas. ¿Qué guardia usás y qué cambia en el repositorio?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Se usa <code>UsuarioActualDep</code> (cualquiera identificado) y se pasa <code>usuario.id</code> al service. El repositorio agrega un método que filtra con <code>.where(Venta.usuario_id == usuario_id)</code>. La ruta se declara antes de cualquier ruta con <code>{venta_id}</code>, por el orden de rutas que se vio en el módulo 02.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> ¿Por qué <code>POST /auth/token</code> recibe un formulario y no JSON?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Porque el flujo de contraseña de OAuth2 define que usuario y contraseña se envían como formulario, con los campos <code>username</code> y <code>password</code>. Respetar el estándar permite que herramientas como el botón Authorize de <code>/docs</code> funcionen sin configuración.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>5.</strong> Iniciá sesión, reiniciá el servidor con otra <code>CLAVE_SECRETA</code> y usá el token viejo. ¿Qué pasa? ¿En qué situación real conviene hacer esto a propósito?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Responde 401: la firma del token no coincide con la clave nueva. Se hace a propósito cuando la clave se filtró o cuando hay que cerrar todas las sesiones a la vez, por ejemplo al despedir a alguien que tenía un token vigente.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación oficial</h2>
+  <ul>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/security/">FastAPI: seguridad, introducción</a></li>
+    <li><a href="https://fastapi.tiangolo.com/es/tutorial/security/oauth2-jwt/">FastAPI: OAuth2 con contraseña, hashing y tokens JWT</a></li>
+    <li><a href="https://frankie567.github.io/pwdlib/">pwdlib (en inglés)</a></li>
+    <li><a href="https://pyjwt.readthedocs.io/en/stable/">PyJWT (en inglés)</a></li>
+    <li><a href="https://www.rfc-editor.org/rfc/rfc7519">RFC 7519: JSON Web Token (la norma formal, en inglés)</a></li>
+    <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html">OWASP: guía para guardar contraseñas (en inglés)</a></li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="05_backend_base.html">← Anterior: Módulo 05</a> ·
+    <a href="07_js_vs_ts.html">Siguiente: Módulo 07, JavaScript vs TypeScript →</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  // ===================== 5.1 Flujo de inicio de sesión =====================
+
+  const POS = { navegador: [100, 250], auth: [305, 250], db: [495, 250], guardia: [685, 250], ruta: [870, 250] };
+
+  const pasosLogin = (nombre, contrasena) => [
+    {
+      titulo: `${nombre} inicia sesión`,
+      texto: `<p>${nombre} escribe usuario y contraseña en la pantalla de inicio de sesión. El navegador los envía <strong>una sola vez</strong> a <code>POST /auth/token</code>, como formulario. Es el único momento en que la contraseña viaja; por eso tiene que viajar por HTTPS.</p>`,
+      nodos: { navegador: "activo" },
+      paquete: { en: "navegador", etiqueta: "usuario + contraseña" },
+      detalle: { titulo: "Petición (formulario)", codigo: `POST /auth/token HTTP/1.1\nContent-Type: application/x-www-form-urlencoded\n\nusername=${nombre}&password=${contrasena}` },
+    },
+    {
+      titulo: "Se busca el usuario",
+      texto: "<p><code>ServicioAuth</code> busca al usuario por nombre. De la base trae el <code>password_hash</code>, nunca una contraseña, porque la base no la tiene.</p>",
+      nodos: { auth: "activo", db: "activo" },
+      paquete: { en: "db", etiqueta: "SELECT usuario" },
+      detalle: { titulo: "Consulta", codigo: `SELECT usuario.id, usuario.nombre, usuario.rol, usuario.password_hash\nFROM usuario WHERE usuario.nombre = '${nombre}'` },
+    },
+  ];
+
+  const pasosPeticion = (nombre, rolOk) => [
+    {
+      titulo: "La petición lleva el token",
+      texto: `<p>Más tarde, la pantalla pide las ventas. El navegador agrega el header <code>Authorization: Bearer</code> con el token de ${nombre}. No envía la contraseña ni el rol: solo el token.</p>`,
+      nodos: { navegador: "activo" },
+      paquete: { en: "guardia", etiqueta: "Bearer eyJ…" },
+      detalle: { titulo: "Petición", codigo: "GET /ventas HTTP/1.1\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIi…" },
+    },
+    {
+      titulo: "Guardia 1: ¿quién sos?",
+      texto: "<p><code>obtener_usuario_actual</code> verifica la firma y el vencimiento con la clave secreta. Son cuentas locales, sin consultar nada. Después busca al usuario del campo <code>sub</code> en la base, para usar su rol actual y confirmar que sigue existiendo.</p>",
+      nodos: { guardia: "ok", db: "activo" },
+      paquete: { en: "db", etiqueta: "firma ✓ · SELECT usuario", tipo: "ok" },
+      detalle: { titulo: "app/dependencies.py", codigo: "contenido = leer_token(token)        # firma y vencimiento\nusuario = sesion.get(Usuario, int(contenido[\"sub\"]))" },
+    },
+    rolOk ? {
+      titulo: "Guardia 2: ¿podés? Sí",
+      texto: `<p><code>requerir_rol("duenio")</code> compara el rol de ${nombre} con el exigido. Coincide, así que FastAPI ejecuta la ruta.</p>`,
+      nodos: { guardia: "ok", ruta: "activo" },
+      paquete: { en: "ruta", etiqueta: "rol duenio ✓", tipo: "ok" },
+      detalle: { titulo: "app/routers/ventas.py", codigo: "def listar_ventas(servicio: ServicioVentasDep, duenio: SoloDuenioDep) -> list[VentaOut]:\n    return servicio.listar()" },
+    } : {
+      titulo: "Guardia 2: ¿podés? No",
+      texto: `<p>${nombre} está autenticado, pero su rol es <code>empleado</code>. <code>requerir_rol("duenio")</code> responde 403 y la ruta no se ejecuta. Es la diferencia entre autenticación (401) y autorización (403).</p>`,
+      nodos: { guardia: "error" },
+      paquete: { en: "guardia", etiqueta: "rol empleado ✗", tipo: "error" },
+      detalle: { titulo: "Respuesta", codigo: "HTTP/1.1 403 Forbidden\n\n{\"detail\":\"No tenés permiso para esta acción\"}" },
+    },
+    rolOk ? {
+      titulo: "La ruta responde 200",
+      texto: "<p>La ruta devuelve todas las ventas. El código de la ruta no tiene ni un <code>if</code> de permisos: los declaró en su firma.</p>",
+      nodos: { navegador: "ok" },
+      paquete: { en: "navegador", etiqueta: "200 · lista de ventas", tipo: "ok" },
+      detalle: { titulo: "Respuesta", codigo: "HTTP/1.1 200 OK\n\n[{\"id\":1,\"fecha\":\"…\",\"usuario_id\":2,\"items\":[…],\"total\":\"7275.00\"}, …]" },
+    } : {
+      titulo: "La pantalla recibe 403",
+      texto: "<p>La pantalla de un empleado ni siquiera debería mostrar esta opción, pero si alguien envía la petición a mano, el servidor la frena igual. Ocultar no es proteger.</p>",
+      nodos: { navegador: "error" },
+      paquete: { en: "navegador", etiqueta: "403", tipo: "error" },
+      detalle: { titulo: "Respuesta", codigo: "HTTP/1.1 403 Forbidden" },
+    },
+  ];
+
+  const verificarOk = (nombre) => ({
+    titulo: "Argon2 verifica",
+    texto: "<p>El servidor calcula el hash de la contraseña recibida con la sal y los parámetros que están dentro del hash guardado, y compara. Coinciden. La operación tarda a propósito (decenas de milisegundos): para un usuario no se nota, para un atacante que prueba millones de contraseñas, sí.</p>",
+    nodos: { auth: "ok" },
+    paquete: { en: "auth", etiqueta: "Argon2 ✓", tipo: "ok" },
+    detalle: { titulo: "Hash guardado (formato)", codigo: "$argon2id$v=19$m=65536,t=3,p=4$<sal>$<hash>" },
+  });
+
+  const emitirToken = (nombre, rol, id) => ({
+    titulo: "Se emite el token",
+    texto: `<p><code>crear_token</code> arma un JWT con el id y el rol de ${nombre}, lo firma con la <code>CLAVE_SECRETA</code> y lo devuelve. El navegador lo guarda; el servidor no guarda nada.</p>`,
+    nodos: { auth: "ok", navegador: "activo" },
+    paquete: { en: "navegador", etiqueta: "200 · token", tipo: "ok" },
+    detalle: { titulo: "Respuesta", codigo: `HTTP/1.1 200 OK\n\n{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIi…","token_type":"bearer"}\n\ncontenido del token: {"sub": "${id}", "rol": "${rol}", "iat": …, "exp": …}` },
+  });
+
+  const ESCENARIOS_FLUJO = {
+    ana: [...pasosLogin("Ana", "ana123"), verificarOk("Ana"), emitirToken("Ana", "duenio", 1), ...pasosPeticion("Ana", true)],
+    bruno: [...pasosLogin("Bruno", "bruno123"), verificarOk("Bruno"), emitirToken("Bruno", "empleado", 2), ...pasosPeticion("Bruno", false)],
+    alterado: [
+      {
+        titulo: "Bruno edita su token",
+        texto: "<p>Bruno tiene un token válido de empleado. Decodifica el contenido (es Base64URL, no está cifrado), cambia <code>\"rol\":\"empleado\"</code> por <code>\"rol\":\"duenio\"</code>, lo vuelve a codificar y deja la firma original.</p>",
+        nodos: { navegador: "activo" },
+        paquete: { en: "navegador", etiqueta: "token editado" },
+        detalle: { titulo: "Contenido alterado", codigo: '{"sub": "2", "rol": "duenio", "exp": …}\n\nfirma: la original, calculada para "rol": "empleado"' },
+      },
+      {
+        titulo: "La firma no coincide",
+        texto: "<p>La guardia recalcula la firma del encabezado y el contenido recibidos con la clave secreta. El resultado no coincide con la firma que vino en el token, porque el contenido cambió. <code>jwt.decode</code> lanza <code>InvalidSignatureError</code> y se responde 401 sin consultar la base. Para fabricar una firma válida, Bruno necesitaría la clave secreta.</p>",
+        nodos: { guardia: "error" },
+        paquete: { en: "guardia", etiqueta: "firma ✗", tipo: "error" },
+        detalle: { titulo: "Respuesta", codigo: "HTTP/1.1 401 Unauthorized\nwww-authenticate: Bearer\n\n{\"detail\":\"Token inválido o vencido\"}" },
+      },
+    ],
+    clave: [
+      ...pasosLogin("Bruno", "bruno124"),
+      {
+        titulo: "Argon2 no coincide",
+        texto: "<p>El hash de <code>bruno124</code> con la sal guardada no coincide con el hash guardado. El servidor responde 401 con el <strong>mismo mensaje</strong> que si el usuario no existiera: así no revela qué nombres de usuario son válidos.</p>",
+        nodos: { auth: "error" },
+        paquete: { en: "auth", etiqueta: "Argon2 ✗", tipo: "error" },
+        detalle: { titulo: "Respuesta", codigo: "HTTP/1.1 401 Unauthorized\nwww-authenticate: Bearer\n\n{\"detail\":\"Usuario o contraseña incorrectos\"}" },
+      },
+      {
+        titulo: "No hay token",
+        texto: "<p>Sin token, ninguna petición protegida va a pasar la primera guardia. La pantalla muestra el error y deja reintentar.</p>",
+        nodos: { navegador: "error" },
+        paquete: { en: "navegador", etiqueta: "401", tipo: "error" },
+        detalle: { titulo: "Estado del navegador", codigo: "token guardado: ninguno" },
+      },
+    ],
+  };
+
+  const raizFlujo = document.getElementById("recorrido-flujo");
+  const dibujarFlujo = crearDiagrama(document.getElementById("diagrama-flujo"), POS);
+  const recorridoFlujo = crearRecorrido(raizFlujo, ESCENARIOS_FLUJO.ana, (paso) => {
+    dibujarFlujo(paso);
+    mostrarDetalle(raizFlujo, paso.detalle);
+  });
+  conectarEscenarios(document.getElementById("escenarios-flujo"), ESCENARIOS_FLUJO, recorridoFlujo);
+
+  // ===================== 5.2 Anatomía de un JWT =====================
+
+  // Token real de Bruno generado por explorar_seguridad.py con la clave de desarrollo.
+  const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwicm9sIjoiZW1wbGVhZG8iLCJpYXQiOjE3OTM2Nzg3NjIsImV4cCI6MTc5MzcwNzU2Mn0.K4s3D8MV1lamiw20s5TUoa8jfD16_eqMsdnmMCBAELM";
+  const [ENCABEZADO, CONTENIDO, FIRMA] = TOKEN.split(".");
+
+  // Base64URL ↔ texto, igual que hace cualquier decodificador: no hace falta ninguna clave.
+  const decodificar = (parte) => JSON.parse(atob(parte.replace(/-/g, "+").replace(/_/g, "/")));
+  const codificar = (objeto) => btoa(JSON.stringify(objeto)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  const contenido = decodificar(CONTENIDO);
+  const fecha = (segundos) => new Date(segundos * 1000).toISOString().replace("T", " ").replace(".000Z", " UTC");
+  const alterado = codificar({ ...contenido, rol: "duenio" });
+
+  const PASOS_JWT = [
+    {
+      titulo: "Tres partes separadas por puntos",
+      texto: "<p>Un JWT es texto: encabezado, contenido y firma, separados por puntos. Los colores son los mismos que usa el sitio de referencia jwt.io.</p>",
+      partes: [ENCABEZADO, CONTENIDO, FIRMA], actual: null,
+      detalleTitulo: "Largo del token", detalle: `${TOKEN.length} caracteres`,
+    },
+    {
+      titulo: "El encabezado",
+      texto: "<p>Decodificado con Base64URL, dice qué algoritmo firma el token: HS256, es decir, HMAC con SHA-256. El servidor solo acepta ese algoritmo (<code>algorithms=[\"HS256\"]</code>), para que nadie le pida verificar con otro.</p>",
+      partes: [ENCABEZADO, CONTENIDO, FIRMA], actual: 0,
+      detalleTitulo: "Encabezado decodificado", detalle: JSON.stringify(decodificar(ENCABEZADO), null, 2),
+    },
+    {
+      titulo: "El contenido se lee sin clave",
+      texto: "<p>Esta página lo acaba de decodificar sin conocer la clave secreta. Cualquiera puede hacer lo mismo con un token. Por eso nunca lleva datos secretos.</p>",
+      partes: [ENCABEZADO, CONTENIDO, FIRMA], actual: 1,
+      detalleTitulo: "Contenido decodificado",
+      detalle: `${JSON.stringify(contenido, null, 2)}\n\niat = ${fecha(contenido.iat)}  (emitido)\nexp = ${fecha(contenido.exp)}  (vence, 8 horas después)`,
+    },
+    {
+      titulo: "La firma no se decodifica",
+      texto: "<p>La firma es el resultado de HMAC-SHA256 aplicado a las dos primeras partes con la <code>CLAVE_SECRETA</code>. No contiene datos: sirve para comprobar que las otras dos partes no cambiaron desde que el servidor las firmó.</p>",
+      partes: [ENCABEZADO, CONTENIDO, FIRMA], actual: 2,
+      detalleTitulo: "Cómo se calcula",
+      detalle: 'firma = HMAC_SHA256(CLAVE_SECRETA, encabezado + "." + contenido)\n      = K4s3D8MV1lamiw20s5TUoa8jfD16_eqMsdnmMCBAELM',
+    },
+    {
+      titulo: "Se cambia el rol: la firma ya no sirve",
+      texto: "<p>Si se cambia <code>empleado</code> por <code>duenio</code>, la parte del medio cambia (resaltada) y la firma queda igual. El servidor recalcula la firma del contenido nuevo, obtiene otro valor y rechaza el token con 401. <code>explorar_seguridad.py</code> hace exactamente esta prueba.</p>",
+      partes: [ENCABEZADO, alterado, FIRMA], actual: 1,
+      detalleTitulo: "Contenido alterado",
+      detalle: `${JSON.stringify({ ...contenido, rol: "duenio" }, null, 2)}\n\nresultado: InvalidSignatureError → 401`,
+    },
+  ];
+
+  const zonaToken = document.getElementById("jwt-token");
+  const CLASES = ["jwt-encabezado", "jwt-contenido", "jwt-firma"];
+
+  crearRecorrido(document.getElementById("recorrido-jwt"), PASOS_JWT, (paso) => {
+    zonaToken.replaceChildren();
+    paso.partes.forEach((parte, indice) => {
+      if (indice > 0) {
+        const punto = document.createElement("span");
+        punto.className = "jwt-punto";
+        punto.textContent = ".";
+        zonaToken.append(punto);
+      }
+      const span = document.createElement("span");
+      span.className = CLASES[indice];
+      if (paso.actual !== null) span.classList.add(indice === paso.actual ? "actual" : "apagada");
+      span.textContent = parte;
+      zonaToken.append(span);
+    });
+    document.getElementById("jwt-titulo").textContent = paso.detalleTitulo;
+    document.getElementById("jwt-detalle").textContent = paso.detalle;
+  });
+</script>
+</body>
+</html>

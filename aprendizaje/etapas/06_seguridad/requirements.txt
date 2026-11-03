@@ -1,0 +1,8 @@
+fastapi[standard]
+sqlalchemy
+pymysql
+alembic
+# Hash de contraseñas con Argon2 (lo que recomienda la documentación de FastAPI)
+pwdlib[argon2]
+# Crear y verificar tokens JWT
+pyjwt
