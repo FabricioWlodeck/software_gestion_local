@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Patrones de diseño</title>
+  <link rel="stylesheet" href="comun/estilos.css">
+</head>
+<body>
+<main>
+  <header class="encabezado">
+    <a class="volver" href="index.html">← Índice de módulos</a>
+    <p class="meta"><span>Módulo 11</span><span>90 min</span><span>Código: <code>aprendizaje/etapas/11_patrones</code></span></p>
+    <h1>Patrones de diseño y cómo decidir cuándo usarlos</h1>
+    <p>Qué es un patrón, cuáles aparecieron ya en los módulos 03 a 10, tres patrones nuevos para el proyecto real (uno para la base, uno para el backend y uno para el frontend) y qué tener en cuenta al tomar una decisión de diseño.</p>
+    <ul class="indice-secciones">
+      <li><a href="#problema">1. Problema</a></li>
+      <li><a href="#concepto">2. Concepto</a></li>
+      <li><a href="#codigo">3. Código mínimo</a></li>
+      <li><a href="#conexion">4. Cómo se conecta</a></li>
+      <li><a href="#animacion">5. Animación</a></li>
+      <li><a href="#errores">6. Errores comunes</a></li>
+      <li><a href="#ejercicios">7. Ejercicios</a></li>
+      <li><a href="#documentacion">8. Documentación y lecturas</a></li>
+    </ul>
+  </header>
+
+  <div class="nota">
+    <p><strong>Por qué este módulo va al final.</strong> Un patrón se entiende cuando ya se vio el problema que resuelve.
+    Con las etapas 03 a 10 hechas, casi todos los patrones de este módulo señalan código que ya existe y funciona. Además,
+    el módulo sirve de puente hacia el diseño del sistema real.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="problema">1. Problema</h2>
+  <p>
+    Al pasar del mini Punto Lácteo al sistema real aparecen preguntas que el material no resolvió. Si el stock del queso
+    no coincide con lo vendido, ¿cómo se sabe quién lo cargó, quién lo ajustó y por qué? Si el precio se calcula a veces
+    con un margen sobre el costo y a veces a mano, ¿dónde va esa regla? Si el carrito suma descuentos y medios de pago,
+    ¿cuántas funciones más tiene que manejar la pantalla de ventas?
+  </p>
+  <p>
+    Estos problemas tienen soluciones conocidas y con nombre, que se llaman <strong>patrones de diseño</strong>. También
+    existe el riesgo opuesto: llenar el código de capas, interfaces y clases que no resuelven ningún problema concreto y
+    que alguien tiene que leer y mantener. Este módulo da los nombres y, sobre todo, un criterio para decidir cuándo
+    conviene aplicar cada uno.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="concepto">2. Concepto</h2>
+
+  <h3>2.1 Qué es un patrón</h3>
+  <p>
+    Un patrón de diseño es una solución probada a un problema que se repite, descrita con un nombre, el contexto en el
+    que sirve y lo que cuesta aplicarla. La idea viene de la arquitectura de edificios: Christopher Alexander la propuso
+    en 1977. Llegó al software con el libro <em>Design Patterns</em> (Gamma, Helm, Johnson y Vlissides, 1994), que
+    reunió 23 patrones de programación orientada a objetos. En 2002, Martin Fowler publicó un catálogo para aplicaciones
+    con base de datos, de donde salen Repository, Service Layer y Unit of Work.
+  </p>
+  <p>
+    El nombre es la mitad del valor de un patrón. Decir «esto es un repository» le explica a otra persona, por ejemplo al
+    profesor que revisa el código, qué hace una clase y qué no hace, sin que tenga que leerla entera. La otra mitad es el
+    problema: un patrón aplicado donde no existe su problema solo agrega código.
+  </p>
+
+  <h3>2.2 Los patrones que ya usaste</h3>
+  <p>
+    Ninguno de los patrones de la <strong>Tabla 1</strong> se agregó por ser un patrón: cada uno apareció en el módulo
+    donde hizo falta. El <code>README.md</code> de la etapa 11 tiene la misma tabla con las rutas completas.
+  </p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Capa</th><th>Patrón</th><th>Dónde está</th><th>Qué resuelve</th></tr></thead>
+      <tbody>
+        <tr><td>Base</td><td>Normalización hasta la tercera forma normal (3FN)</td><td>Módulo 04, <code>01_esquema.sql</code></td><td>Cada dato se guarda una sola vez</td></tr>
+        <tr><td>Base</td><td>Copia histórica</td><td><code>venta_detalle.precio_unitario</code></td><td>Si cambia el precio, la venta vieja conserva el suyo</td></tr>
+        <tr><td>Base</td><td>Desnormalización deliberada</td><td><code>venta.total</code></td><td>El total no se recalcula en cada consulta</td></tr>
+        <tr><td>Base</td><td>Bloqueo pesimista</td><td><code>SELECT ... FOR UPDATE</code> (módulo 05)</td><td>Dos cajas no venden el mismo último kilo</td></tr>
+        <tr><td>Base</td><td>Migraciones versionadas</td><td><code>alembic/versions/</code></td><td>El esquema cambia igual en cada máquina</td></tr>
+        <tr><td>Backend</td><td>Arquitectura en capas</td><td>routers, services y repositories (módulo 03)</td><td>Cada capa cambia por un motivo distinto</td></tr>
+        <tr><td>Backend</td><td>Repository</td><td><code>repositories/</code> (memoria en 03, SQL en 05)</td><td>El service no sabe dónde están los datos</td></tr>
+        <tr><td>Backend</td><td>Service Layer</td><td><code>services/ventas.py</code></td><td>Las reglas del negocio están en un solo lugar</td></tr>
+        <tr><td>Backend</td><td>Unit of Work</td><td>La <code>Session</code> de SQLAlchemy y su <code>commit()</code></td><td>Una venta se guarda entera o no se guarda</td></tr>
+        <tr><td>Backend</td><td>Inyección de dependencias</td><td><code>Depends</code> en <code>dependencies.py</code></td><td>El router recibe la sesión y el usuario sin crearlos</td></tr>
+        <tr><td>Backend</td><td>Fábrica</td><td><code>requerir_rol()</code> (módulo 06)</td><td>Una dependencia por rol sin repetir código</td></tr>
+        <tr><td>Backend</td><td>DTO (<em>Data Transfer Object</em> u Objeto de Transferencia de Datos)</td><td><code>schemas/</code> frente a <code>models.py</code></td><td>La API no expone columnas internas como <code>password_hash</code></td></tr>
+        <tr><td>Frontend</td><td>Estado local, elevado y derivado</td><td><code>TarjetaProducto</code>, <code>PantallaVentas</code> y <code>Carrito</code> (módulo 08)</td><td>Cada dato vive en un solo componente y el resto se calcula</td></tr>
+        <tr><td>Frontend</td><td>Cliente de API centralizado</td><td><code>api/cliente.ts</code> (módulo 09)</td><td>Un solo archivo sabe de URLs, headers y tokens</td></tr>
+        <tr><td>Frontend</td><td>Provider con hook propio</td><td><code>SesionProvider</code> y <code>useSesion</code></td><td>Cualquier componente lee la sesión sin recibirla por props</td></tr>
+        <tr><td>Despliegue</td><td>Configuración por entorno</td><td><code>config.py</code> y <code>.env</code> (módulos 06 y 10)</td><td>El mismo código sirve en la PC y en el servidor</td></tr>
+        <tr><td>Despliegue</td><td>Proxy inverso</td><td><code>nginx.conf</code> (módulo 10)</td><td>Una sola puerta de entrada para el frontend y la API</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 1. Patrones que aparecieron en los módulos 03 a 10.</figcaption>
+  </div>
+
+  <h3>2.3 Para la base: libro de movimientos</h3>
+  <p>
+    En las etapas anteriores, el stock es una columna que cada venta sobrescribe. Si el queso marca 0,700 kg cuando
+    debería haber 2,950, la columna no puede decir qué pasó, porque cada <code>UPDATE</code> borró el valor anterior.
+  </p>
+  <p>
+    Un <strong>libro de movimientos</strong> guarda cada cambio como una fila nueva de <code>movimiento_stock</code>, con
+    el tipo (compra, venta, ajuste o merma), la cantidad con signo, el usuario, la fecha y el motivo. Las filas no se
+    modifican ni se borran: un error se corrige con otro movimiento. El stock es la suma de las cantidades. Es la misma
+    idea que el libro diario de la contabilidad, y su versión general, donde todo el estado de un sistema se reconstruye
+    a partir de eventos, se llama <em>event sourcing</em>.
+  </p>
+  <p>
+    Sumar todas las filas en cada consulta sería lento con años de movimientos. Por eso la columna
+    <code>producto.stock</code> se conserva como <strong>saldo</strong>, una desnormalización deliberada como la de
+    <code>venta.total</code>: cada operación inserta el movimiento y actualiza el saldo en la misma transacción. Dos
+    restricciones <code>CHECK</code> protegen el libro: el signo tiene que corresponder al tipo, y los ajustes y las mermas
+    exigen un motivo.
+  </p>
+  <p>
+    MariaDB ofrece además <strong>tablas versionadas del sistema</strong> (<code>WITH SYSTEM VERSIONING</code>), que
+    guardan cada versión de una fila sin escribir código y permiten consultar la tabla en una fecha pasada con
+    <code>FOR SYSTEM_TIME AS OF</code>. Sirven para el historial de precios, pero no reemplazan al libro: guardan el valor
+    anterior, no el tipo de movimiento ni el motivo.
+  </p>
+  <p>
+    El mismo principio, no borrar lo que pasó y registrar el cambio, se aplica a las ventas. Una venta que no tiene que
+    contar se marca con un estado y queda en la base, en lugar de eliminarse con <code>DELETE</code>.
+  </p>
+
+  <h3>2.4 Para el backend: Estrategia</h3>
+  <p>
+    El patrón <strong>Estrategia</strong> (<em>Strategy</em>) agrupa varias formas de hacer lo mismo detrás de una
+    interfaz común. En la etapa, el precio se puede fijar con un margen sobre el costo (<code>PrecioPorMargen</code>) o a
+    mano (<code>PrecioManual</code>). Las dos clases tienen el método <code>calcular(costo)</code>, y el service llama a
+    ese método sin saber cuál de las dos recibió.
+  </p>
+  <p>
+    La base guarda dos columnas, <code>modo_precio</code> y <code>valor_precio</code>. Una <strong>fábrica</strong>,
+    <code>estrategia_para()</code>, las traduce al objeto que corresponde, igual que <code>requerir_rol()</code> fabrica
+    una dependencia en el módulo 06. La interfaz se declara con <code>Protocol</code>: cualquier clase que tenga
+    <code>calcular</code> con esa firma cumple, sin heredar de nada, como pasa con las interfaces de TypeScript.
+  </p>
+  <p>
+    Con dos modos, un <code>if</code> hace exactamente lo mismo y se lee igual de bien. La estrategia empieza a pagar con
+    el tercer modo, por ejemplo un descuento o un precio mayorista, o cuando cada modo tiene sus propios datos y
+    validaciones. A partir de ahí, cada caso nuevo es una clase nueva y ninguna de las existentes cambia.
+  </p>
+
+  <h3>2.5 Para el frontend: reducer y hook personalizado</h3>
+  <p>
+    En la etapa 09, <code>PantallaVentas</code> tiene el carrito en un <code>useState</code> y tres funciones que lo
+    modifican, mezcladas con la carga de productos y el cobro. Cada descuento o medio de pago nuevo agregaría otra
+    función a la pantalla.
+  </p>
+  <p>
+    Un <strong>reducer</strong> es una función pura que recibe el estado actual y una <strong>acción</strong> (un objeto
+    que describe qué pasó, como <code>{ tipo: "quitar", productoId: 2 }</code>) y devuelve el estado nuevo. Todas las
+    formas de cambiar el carrito quedan en <code>carritoReducer.ts</code>, que no importa React y se prueba con Node solo.
+    <code>useReducer</code> guarda el estado y devuelve <code>dispatch</code>: llamarlo con una acción ejecuta el reducer
+    y vuelve a dibujar el componente.
+  </p>
+  <p>
+    El <strong>hook personalizado</strong> <code>useCarrito()</code> envuelve todo eso y le ofrece a la pantalla tres
+    funciones: <code>agregar</code>, <code>quitar</code> y <code>vaciar</code>. Antes de que existieran los hooks, la lógica
+    se separaba de la vista con componentes «contenedores»; hoy se separa con hooks como este. Los componentes de
+    presentación (<code>TarjetaProducto</code>, <code>Carrito</code>) no cambian: siguen recibiendo datos y avisando
+    eventos. Para un estado con uno o dos cambios simples, <code>useState</code> sigue siendo más claro.
+  </p>
+
+  <h3>2.6 Qué tener en cuenta al tomar una decisión de diseño</h3>
+  <p>
+    Un patrón responde a un problema; nunca es un objetivo en sí mismo. Estas preguntas, en este orden, sirven para
+    cualquier decisión de diseño, sea un patrón, una biblioteca o la forma de una tabla.
+  </p>
+  <ol>
+    <li><p><strong>¿Qué problema concreto hay hoy?</strong> Si no se puede describir con un caso del negocio, como «la
+    dueña quiere saber quién ajustó el queso», todavía no hace falta la solución. Es el principio YAGNI (<em>You Aren't
+    Gonna Need It</em> o No Lo Vas a Necesitar).</p></li>
+    <li><p><strong>¿Cuánto cuesta cambiarla después?</strong> Algunas decisiones son caras de revertir: el esquema de la
+    base, cómo se representan el dinero y el peso, qué historial se guarda y cómo se autentica a los usuarios. Otras son
+    baratas: la biblioteca de componentes, los nombres de carpetas o los estilos. Se dedica tiempo a las primeras y se
+    deciden rápido las segundas. Las decisiones sobre historial están entre las más caras, porque un dato que no se
+    guardó no se puede reconstruir después.</p></li>
+    <li><p><strong>¿Qué cambia junto y qué cambia por separado?</strong> Lo que cambia por el mismo motivo va junto, y a
+    eso se le llama <strong>cohesión</strong>. Lo que cambia por motivos distintos se separa, para que un cambio no rompa
+    lo otro, y a eso se le llama <strong>bajo acoplamiento</strong>. Las capas del módulo 03 son esta idea aplicada.</p></li>
+    <li><p><strong>¿Hay al menos tres casos?</strong> La regla de tres dice que la primera vez se escribe, la segunda se
+    duplica y a la tercera se abstrae. Sandi Metz sostiene que duplicar cuesta menos que mantener una abstracción
+    equivocada, porque una abstracción mala obliga a agregarle parámetros y condiciones con cada caso nuevo.</p></li>
+    <li><p><strong>¿Se puede probar por partes?</strong> Si para probar un cálculo hacen falta la base, el servidor y el
+    navegador, las piezas están acopladas. El reducer y la estrategia de la etapa se prueban solos.</p></li>
+    <li><p><strong>¿Sigue las convenciones del framework?</strong> FastAPI resuelve dependencias con
+    <code>Depends</code> y React reutiliza lógica con hooks. Un patrón que pelea con el framework, como armar a mano un
+    contenedor de dependencias en FastAPI, cuesta más y sorprende a quien ya conoce el framework.</p></li>
+    <li><p><strong>¿Quién lo va a leer y mantener?</strong> El profesor va a revisar el código y el mantenimiento queda a
+    cargo de una sola persona. Se prefiere el código que se entiende sin explicación al código ingenioso.</p></li>
+    <li><p><strong>¿Cuáles son las restricciones reales?</strong> El plazo de la expo, una sola persona desarrollando, el
+    servidor de la facultad y MariaDB como motor. Una solución que no entra en esas restricciones no es una opción, por
+    buena que sea en otro contexto.</p></li>
+    <li><p><strong>¿Quedó escrito el porqué?</strong> El código muestra qué se hizo, pero no por qué ni qué se descartó.
+    Para eso están los registros de la sección 2.7.</p></li>
+  </ol>
+
+  <h3>2.7 Registros de decisiones de arquitectura</h3>
+  <p>
+    Un <strong>ADR</strong> (<em>Architecture Decision Record</em> o Registro de Decisión de Arquitectura) es un archivo
+    corto que guarda una decisión importante con su contexto, las opciones consideradas, lo que se decidió y sus
+    consecuencias, incluidas las negativas. El formato lo propuso Michael Nygard en 2011. Los registros se numeran, se
+    guardan en el repositorio y no se borran: si una decisión cambia, se escribe uno nuevo con estado «Reemplaza a
+    0002», y el viejo pasa a «Reemplazada por 0005».
+  </p>
+  <p>
+    La carpeta <code>decisiones/</code> de la etapa tiene la plantilla y tres ejemplos. Dos documentan decisiones ya
+    tomadas en el material (<code>DECIMAL</code> para dinero y peso, y el token en <code>localStorage</code>). El tercero,
+    el stock como libro de movimientos, tiene estado «Propuesta»: se acepta o se rechaza al diseñar el sistema real.
+    Dentro de seis meses, o cuando el profesor pregunte por qué el stock no es una columna, la respuesta está escrita.
+  </p>
+
+  <!-- ============================================================ -->
+  <h2 id="codigo">3. Código mínimo</h2>
+  <p>El libro de movimientos en <code>bd/libro_de_movimientos.sql</code> (resumido):</p>
+  <pre><code>CREATE TABLE movimiento_stock (
+    id           INT            AUTO_INCREMENT PRIMARY KEY,
+    producto_id  INT            NOT NULL,
+    tipo         VARCHAR(10)    NOT NULL,
+    cantidad     DECIMAL(10, 3) NOT NULL,  -- con signo: positiva entra, negativa sale
+    usuario      VARCHAR(40)    NOT NULL,
+    motivo       VARCHAR(120)   NULL,
+    fecha        DATETIME       NOT NULL,
+    CONSTRAINT ck_movimiento_signo CHECK (
+        (tipo = 'compra' AND cantidad &gt; 0)
+        OR (tipo IN ('venta', 'merma') AND cantidad &lt; 0)
+        OR (tipo = 'ajuste' AND cantidad &lt;&gt; 0)
+    )
+);
+
+-- El stock es la suma; el saldo de cada fila, una función de ventana.
+SELECT fecha, tipo, cantidad, usuario,
+       SUM(cantidad) OVER (ORDER BY fecha, id) AS saldo
+FROM movimiento_stock
+WHERE producto_id = 1;</code></pre>
+
+  <p>La estrategia de precios en <code>backend/precios.py</code>:</p>
+  <pre><code>class EstrategiaDePrecio(Protocol):
+    def calcular(self, costo: Decimal) -&gt; Decimal: ...
+
+@dataclass(frozen=True)
+class PrecioPorMargen:
+    porcentaje: Decimal  # 35 significa 35 % sobre el costo
+
+    def calcular(self, costo: Decimal) -&gt; Decimal:
+        return (costo * (1 + self.porcentaje / 100)).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+
+@dataclass(frozen=True)
+class PrecioManual:
+    precio: Decimal
+
+    def calcular(self, costo: Decimal) -&gt; Decimal:
+        return self.precio  # el costo no influye: la dueña lo fijó a mano</code></pre>
+
+  <p>El reducer y el hook del carrito en <code>frontend/</code>:</p>
+  <pre><code>export type AccionCarrito =
+  | { tipo: "agregar"; producto: Producto; cantidad: string }
+  | { tipo: "quitar"; productoId: number }
+  | { tipo: "vaciar" };
+
+export function carritoReducer(items: ItemCarrito[], accion: AccionCarrito): ItemCarrito[] {
+  switch (accion.tipo) {
+    case "agregar":
+      return [...items.filter((item) =&gt; item.producto.id !== accion.producto.id),
+              { producto: accion.producto, cantidad: accion.cantidad }];
+    case "quitar":
+      return items.filter((item) =&gt; item.producto.id !== accion.productoId);
+    case "vaciar":
+      return [];
+  }
+}
+
+export function useCarrito() {
+  const [items, dispatch] = useReducer(carritoReducer, CARRITO_VACIO);
+  return {
+    items,
+    agregar: (producto: Producto, cantidad: string) =&gt; dispatch({ tipo: "agregar", producto, cantidad }),
+    quitar: (productoId: number) =&gt; dispatch({ tipo: "quitar", productoId }),
+    vaciar: () =&gt; dispatch({ tipo: "vaciar" }),
+  };
+}</code></pre>
+
+  <p>Desde la carpeta de la etapa (la preparación de la base está en el <code>README.md</code>):</p>
+  <pre><code>python backend/precios.py           # recalcula tres precios con costos nuevos
+node frontend/probar_carrito.ts     # ejecuta el reducer y sus comprobaciones</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="conexion">4. Cómo se conecta</h2>
+  <p>Los tres patrones nuevos encajan en la estructura que ya existe sin reorganizarla (<strong>Tabla 2</strong>).</p>
+  <div class="tabla">
+    <table>
+      <thead><tr><th>Patrón</th><th>Dónde iría en el proyecto real</th><th>Qué cambia en lo que ya existe</th></tr></thead>
+      <tbody>
+        <tr><td>Libro de movimientos</td><td>Tabla <code>movimiento_stock</code> (una migración nueva de Alembic) y <code>repositories/stock.py</code></td><td><code>ServicioVentas.registrar</code> inserta un movimiento de tipo venta por línea, en la misma transacción que la venta y el saldo</td></tr>
+        <tr><td>Estrategia de precio</td><td><code>services/precios.py</code> y dos columnas nuevas en <code>producto</code></td><td>El service de compras recalcula el precio; las ventas siguen copiando <code>producto.precio</code> en <code>precio_unitario</code></td></tr>
+        <tr><td>Reducer y hook</td><td><code>features/ventas/carritoReducer.ts</code> y <code>useCarrito.ts</code></td><td><code>PantallaVentas</code> reemplaza el <code>useState</code> del carrito por <code>useCarrito()</code>; <code>Carrito</code> y <code>TarjetaProducto</code> no cambian</td></tr>
+        <tr><td>Registros de decisiones</td><td>Carpeta <code>docs/decisiones/</code> en la raíz del repositorio</td><td>Nada en el código: cada decisión del sistema real agrega un archivo</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Tabla 2. Dónde se ubicaría cada patrón nuevo en el proyecto real.</figcaption>
+  </div>
+  <div class="nota">
+    <p><strong>Para el proyecto real.</strong> El libro de movimientos se relaciona con otra decisión pendiente: los
+    lotes con vencimiento y la regla FEFO (<em>First Expired, First Out</em> o Primero en Vencer, Primero en Salir). Si
+    se guardan lotes, cada movimiento apunta al lote del que sale. Conviene decidir las dos cosas juntas.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="animacion">5. Animación: los patrones en acción</h2>
+  <p>El primer escenario recorre una venta con el código de las etapas 08, 09 y 06. Las salidas de los otros dos son las de la etapa 11.</p>
+
+  <div class="recorrido" id="recorrido" tabindex="0">
+    <div class="escenarios" id="escenarios">
+      <button type="button" class="escenario" data-escenario="venta" aria-pressed="true">Una venta, patrón por patrón</button>
+      <button type="button" class="escenario" data-escenario="precio" aria-pressed="false">Costo nuevo: la estrategia</button>
+      <button type="button" class="escenario" data-escenario="stock" aria-pressed="false">¿Dónde está el queso que falta?</button>
+    </div>
+    <div class="escena">
+      <svg class="diagrama" id="diagrama" viewBox="0 0 960 300" role="img" aria-label="Piezas del sistema, del componente de React a MariaDB">
+        <rect class="zona" x="18" y="30" width="399" height="200" rx="14"/>
+        <text class="etiqueta-zona" x="32" y="52">Navegador (React)</text>
+        <rect class="zona" x="433" y="30" width="399" height="200" rx="14"/>
+        <text class="etiqueta-zona" x="447" y="52">Backend (FastAPI)</text>
+        <rect class="zona" x="840" y="30" width="114" height="200" rx="14"/>
+        <text class="etiqueta-zona" x="852" y="52">Base</text>
+        <line class="linea" x1="145" y1="130" x2="160" y2="130"/>
+        <line class="linea" x1="275" y1="130" x2="290" y2="130"/>
+        <line class="linea" x1="405" y1="130" x2="445" y2="130"/>
+        <line class="linea" x1="560" y1="130" x2="575" y2="130"/>
+        <line class="linea" x1="690" y1="130" x2="705" y2="130"/>
+        <line class="linea" x1="820" y1="130" x2="848" y2="130"/>
+        <line class="pista" x1="20" y1="265" x2="950" y2="265"/>
+        <g class="nodo" id="n-componente"><rect x="30" y="80" width="115" height="100" rx="12"/>
+          <text class="titulo-nodo" x="87.5" y="118" text-anchor="middle">Componente</text>
+          <text class="sub" x="87.5" y="140" text-anchor="middle">muestra y avisa</text></g>
+        <g class="nodo" id="n-estado"><rect x="160" y="80" width="115" height="100" rx="12"/>
+          <text class="titulo-nodo" x="217.5" y="118" text-anchor="middle">Estado</text>
+          <text class="sub" x="217.5" y="140" text-anchor="middle">useState o</text>
+          <text class="sub" x="217.5" y="158" text-anchor="middle">useReducer</text></g>
+        <g class="nodo" id="n-cliente"><rect x="290" y="80" width="115" height="100" rx="12"/>
+          <text class="titulo-nodo" x="347.5" y="118" text-anchor="middle">cliente.ts</text>
+          <text class="sub" x="347.5" y="140" text-anchor="middle">habla con</text>
+          <text class="sub" x="347.5" y="158" text-anchor="middle">la API</text></g>
+        <g class="nodo" id="n-router"><rect x="445" y="80" width="115" height="100" rx="12"/>
+          <text class="titulo-nodo" x="502.5" y="118" text-anchor="middle">Router</text>
+          <text class="sub" x="502.5" y="140" text-anchor="middle">+ Depends</text></g>
+        <g class="nodo" id="n-servicio"><rect x="575" y="80" width="115" height="100" rx="12"/>
+          <text class="titulo-nodo" x="632.5" y="118" text-anchor="middle">Service</text>
+          <text class="sub" x="632.5" y="140" text-anchor="middle">reglas del</text>
+          <text class="sub" x="632.5" y="158" text-anchor="middle">negocio</text></g>
+        <g class="nodo" id="n-repositorio"><rect x="705" y="80" width="115" height="100" rx="12"/>
+          <text class="titulo-nodo" x="762.5" y="118" text-anchor="middle">Repository</text>
+          <text class="sub" x="762.5" y="140" text-anchor="middle">+ Session</text></g>
+        <g class="nodo" id="n-base"><rect x="848" y="80" width="100" height="100" rx="12"/>
+          <text class="titulo-nodo" x="898" y="118" text-anchor="middle">MariaDB</text>
+          <text class="sub" x="898" y="140" text-anchor="middle">tablas</text></g>
+        <g class="paquete"><rect x="-40" y="-15" width="80" height="30" rx="15"/><text x="0" y="5" text-anchor="middle"></text></g>
+      </svg>
+    </div>
+    <p class="recorrido-numero"></p>
+    <h3 class="recorrido-titulo"></h3>
+    <div class="recorrido-texto"></div>
+    <div class="detalle"><p class="detalle-titulo"></p><pre class="envolver"><code></code></pre></div>
+    <div class="recorrido-progreso"><span></span></div>
+    <div class="recorrido-controles"></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="errores">6. Errores comunes</h2>
+
+  <div class="error-comun">
+    <p><strong>Aplicar un patrón porque aparece en un libro.</strong></p>
+    <p>El código se alarga sin que haya un problema que lo justifique, y quien lo lee busca un motivo que no existe. Antes de aplicar un patrón, hay que poder nombrar el caso del negocio que lo pide.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Crear una interfaz «por si mañana cambiamos».</strong></p>
+    <p>Una interfaz con una sola implementación se justifica si separa algo que cambia por otro motivo, como el repository que aísla el SQL de las reglas. Si su único motivo es un cambio que nadie pidió, es costo sin beneficio.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Abstraer con el segundo caso.</strong></p>
+    <p>Dos casos parecidos todavía no muestran qué tienen en común y qué no. La abstracción que sale de ahí suele necesitar parámetros y condiciones nuevas con el tercer caso. Duplicar una vez y esperar es más barato.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Borrar registros del negocio.</strong></p>
+    <p>Un <code>DELETE</code> de una venta o un <code>UPDATE</code> que pisa el stock eliminan la única prueba de lo que pasó. Se registra un cambio de estado o un movimiento nuevo, y la historia queda.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Poner reglas del negocio en el router o en el componente.</strong></p>
+    <p>Cuando el bot de Telegram necesite consultar el stock, la regla tendría que duplicarse. En el service, el bot y la API usan el mismo código.</p>
+  </div>
+  <div class="error-comun">
+    <p><strong>Copiar la arquitectura de un sistema grande.</strong></p>
+    <p>Microservicios, colas de mensajes o bases separadas para lectura y escritura resuelven problemas de equipos y volúmenes que Punto Lácteo no tiene. Para dos locales alcanza con un backend y una base, bien organizados por dentro.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ejercicios">7. Ejercicios</h2>
+
+  <div class="ejercicio">
+    <p><strong>1.</strong> En la etapa 06, encontrá la línea exacta donde aparece cada patrón: dónde la Unit of Work confirma la venta, dónde se fabrica una dependencia por rol, dónde el repository bloquea una fila y dónde el DTO de usuario descarta la contraseña.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>La confirmación es <code>self.sesion.commit()</code> en la línea 65 de <code>app/services/ventas.py</code>. La fábrica es <code>requerir_rol</code>, en la línea 48 de <code>app/dependencies.py</code>, y se usa en la 57. El bloqueo es <code>.with_for_update()</code>, en la línea 29 de <code>app/repositories/productos.py</code>. El DTO es <code>UsuarioOut</code> en <code>app/schemas/auth.py</code>: no declara <code>password_hash</code>, así que FastAPI no lo incluye en la respuesta.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>2.</strong> Agregá a <code>precios.py</code> una estrategia <code>PrecioConDescuento</code> que aplique un porcentaje de descuento sobre el precio de <em>otra</em> estrategia. ¿Qué clases existentes tuviste que modificar?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>@dataclass(frozen=True)
+class PrecioConDescuento:
+    base: EstrategiaDePrecio
+    descuento: Decimal  # 10 significa 10 % menos
+
+    def calcular(self, costo: Decimal) -&gt; Decimal:
+        precio = self.base.calcular(costo)
+        return (precio * (1 - self.descuento / 100)).quantize(CENTAVOS, rounding=ROUND_HALF_UP)</code></pre>
+      <p>Ninguna. <code>PrecioConDescuento(PrecioPorMargen(Decimal("35")), Decimal("10")).calcular(Decimal("9800.00"))</code> devuelve <code>11907.00</code>. Como envuelve a otra estrategia, el descuento funciona sobre cualquiera de las dos. Solo la fábrica necesitaría un modo nuevo para crearla a partir de la base.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>3.</strong> Escribí una consulta sobre el libro de movimientos que responda cuánto queso ajustó o descartó cada usuario en la semana.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <pre><code>SELECT usuario, SUM(cantidad) AS total
+FROM movimiento_stock
+WHERE producto_id = 1 AND tipo IN ('ajuste', 'merma')
+GROUP BY usuario
+ORDER BY usuario;</code></pre>
+      <p>Con los datos del script, Ana suma −0,250 kg (la merma) y Carla −2,000 kg (el ajuste del cierre). Si se quita el filtro por producto y se agrega <code>producto_id</code> al <code>GROUP BY</code>, la misma consulta sirve para todo el local.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>4.</strong> Llevá el reducer y el hook a la etapa 08: copiá <code>carritoReducer.ts</code> y <code>useCarrito.ts</code> a <code>src/features/ventas/</code>, cambiá en los dos el import de <code>./tipos.ts</code> por <code>../../tipos</code> y hacé que <code>PantallaVentas</code> use <code>useCarrito()</code>. ¿Qué componentes tuviste que modificar?</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>Solo <code>PantallaVentas</code>. Las partes que cambian:</p>
+      <pre><code>import { useCarrito } from "./useCarrito";
+
+export function PantallaVentas() {
+  // ...productos, cargando y mensaje siguen igual
+  const carrito = useCarrito();
+
+  function agregar(producto: Producto, cantidad: string) {
+    carrito.agregar(producto, cantidad);
+    setMensaje(null);
+  }
+
+  function cobrar() {
+    setMensaje(`Venta simulada con ${carrito.items.length} producto(s). En el módulo 09 se guarda de verdad.`);
+    carrito.vaciar();
+  }
+
+  // en el JSX:
+  &lt;Carrito items={carrito.items} onQuitar={carrito.quitar} onCobrar={cobrar} /&gt;</code></pre>
+      <p>La función <code>quitar</code> desaparece de la pantalla, y <code>ItemCarrito</code> ya no se importa ahí. <code>Carrito</code>, <code>ListaProductos</code> y <code>TarjetaProducto</code> no cambian, porque siguen recibiendo los mismos props. Con estos cambios, <code>npm run build</code> y <code>npm run lint</code> pasan sin errores.</p>
+    </details>
+  </div>
+
+  <div class="ejercicio">
+    <p><strong>5.</strong> Con <code>decisiones/plantilla.md</code>, escribí el registro 0004 para una decisión pendiente del sistema real: cómo se marca una venta que no tiene que contar en los totales.</p>
+    <details>
+      <summary>Ver respuesta</summary>
+      <p>No hay una única respuesta correcta, pero un buen registro incluye lo siguiente. El contexto explica que un empleado no puede anular una venta y que la dueña necesita saber quién marcó cada una. Las opciones son, por ejemplo, borrar la venta, una columna <code>estado</code> con valores como <code>valida</code> y <code>observada</code>, o una tabla aparte de observaciones con usuario, fecha y motivo. Las consecuencias dicen qué consultas cambian (todos los totales filtran por estado) y qué se pierde con cada opción. El estado del registro es «Propuesta» hasta que se decida.</p>
+    </details>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="documentacion">8. Documentación y lecturas</h2>
+  <p>
+    Las lecturas están ordenadas por prioridad. Con el plazo de la expo alcanza con las de 8.1, que son artículos cortos;
+    el resto sirve para consultar durante el proyecto real y para seguir después.
+  </p>
+
+  <h3>8.1 Para leer antes de empezar el proyecto</h3>
+  <ul>
+    <li><a href="https://martinfowler.com/bliki/Yagni.html">Martin Fowler: «Yagni» (en inglés)</a>. Explica qué cuesta construir algo antes de necesitarlo, incluso cuando al final se termina usando.</li>
+    <li><a href="https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction">Sandi Metz: «The Wrong Abstraction» (en inglés)</a>. Por qué una abstracción equivocada sale más cara que el código duplicado y cómo deshacerla.</li>
+    <li><a href="https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions">Michael Nygard: «Documenting Architecture Decisions» (en inglés)</a>. El artículo original de los ADR, con el formato que usa la plantilla de la etapa.</li>
+    <li><a href="https://es.react.dev/learn/extracting-state-logic-into-a-reducer">React: Extraer la lógica de estado en un reducer</a>. La explicación oficial de <code>useReducer</code>, con un ejemplo parecido al carrito.</li>
+  </ul>
+
+  <h3>8.2 En línea y gratis, para consultar durante el proyecto</h3>
+  <ul>
+    <li><a href="https://www.cosmicpython.com/book/preface.html">Harry Percival y Bob Gregory: <em>Architecture Patterns with Python</em> (en inglés)</a>. Libro completo y gratuito sobre Repository, Service Layer y Unit of Work en Python con SQLAlchemy. Usa Flask, pero los patrones se trasladan igual a FastAPI. Los capítulos más útiles son el <a href="https://www.cosmicpython.com/book/chapter_02_repository.html">2</a>, el <a href="https://www.cosmicpython.com/book/chapter_04_service_layer.html">4</a> y el <a href="https://www.cosmicpython.com/book/chapter_06_uow.html">6</a>.</li>
+    <li><a href="https://martinfowler.com/eaaCatalog/">Martin Fowler: catálogo de <em>Patterns of Enterprise Application Architecture</em> (en inglés)</a>. Una ficha por patrón, entre ellas <a href="https://martinfowler.com/eaaCatalog/repository.html">Repository</a>, <a href="https://martinfowler.com/eaaCatalog/serviceLayer.html">Service Layer</a> y <a href="https://martinfowler.com/eaaCatalog/unitOfWork.html">Unit of Work</a>. Su artículo sobre <a href="https://martinfowler.com/eaaDev/EventSourcing.html">Event Sourcing</a> es la versión general del libro de movimientos.</li>
+    <li><a href="https://refactoring.guru/es/design-patterns">Refactoring.Guru: patrones de diseño</a>. Los patrones clásicos con ilustraciones y ejemplos en Python y TypeScript. Sirven en especial <a href="https://refactoring.guru/es/design-patterns/strategy">Strategy</a> y <a href="https://refactoring.guru/es/design-patterns/adapter">Adapter</a>, que encaja con el bot de Telegram: un notificador con la misma interfaz para Telegram o para la consola.</li>
+    <li><a href="https://www.patterns.dev/">Lydia Hallie y Addy Osmani: patterns.dev (en inglés)</a>. Patrones de JavaScript y React, entre ellos el de <a href="https://www.patterns.dev/react/hooks-pattern">hooks</a>, el de <a href="https://www.patterns.dev/react/presentational-container-pattern">contenedor y presentación</a> y el de <a href="https://www.patterns.dev/vanilla/provider-pattern">provider</a>.</li>
+    <li>React, documentación oficial: <a href="https://es.react.dev/learn/reusing-logic-with-custom-hooks">Reutilizar lógica con Hooks personalizados</a>, <a href="https://es.react.dev/learn/choosing-the-state-structure">Elegir la estructura del estado</a>, <a href="https://es.react.dev/learn/you-might-not-need-an-effect">Quizás no necesites un Efecto</a> y <a href="https://es.react.dev/learn/passing-data-deeply-with-context">Pasar datos en profundidad con contexto</a>.</li>
+    <li><a href="https://12factor.net/es/">The Twelve-Factor App</a>. Doce reglas para aplicaciones que se despliegan en servidores, como la configuración por variables de entorno de los módulos 06 y 10.</li>
+    <li><a href="https://adr.github.io/">adr.github.io (en inglés)</a>. Otras plantillas de ADR y herramientas para mantenerlos.</li>
+    <li><a href="https://mariadb.com/docs/server/reference/sql-structure/temporal-tables/system-versioned-tables">MariaDB: tablas versionadas del sistema (en inglés)</a>. Referencia de <code>WITH SYSTEM VERSIONING</code> y <code>FOR SYSTEM_TIME AS OF</code>.</li>
+    <li>Documentación usada en la etapa: <a href="https://docs.python.org/es/3/library/typing.html">Python: módulo <code>typing</code>, con <code>Protocol</code></a>, <a href="https://fastapi.tiangolo.com/es/tutorial/bigger-applications/">FastAPI: aplicaciones más grandes</a>, <a href="https://fastapi.tiangolo.com/es/tutorial/dependencies/">FastAPI: dependencias</a> y <a href="https://docs.sqlalchemy.org/en/21/orm/session_basics.html">SQLAlchemy: la sesión (en inglés)</a>.</li>
+  </ul>
+
+  <h3>8.3 Un libro corto</h3>
+  <ul>
+    <li><a href="https://web.stanford.edu/~ouster/cgi-bin/book.php">John Ousterhout: <em>A Philosophy of Software Design</em>, 2.ª edición, 2021 (en inglés)</a>. Tiene menos de 200 páginas y no es gratuito. Trata la complejidad como el problema central del diseño y propone módulos «profundos», con una interfaz simple que esconde mucho trabajo. Ayuda a reconocer cuándo una capa o una clase no aporta nada.</li>
+  </ul>
+
+  <h3>8.4 Cursos gratuitos</h3>
+  <ul>
+    <li><a href="https://fullstackopen.com/es/">Universidad de Helsinki: Full Stack Open</a>, en español. Las partes de React aplican directo al proyecto, en especial la <a href="https://fullstackopen.com/es/part7">parte 7</a>, con hooks personalizados. El backend del curso usa Node en lugar de Python.</li>
+    <li><a href="https://cs50.harvard.edu/sql/">Harvard: CS50's Introduction to Databases with SQL (en inglés)</a>. Tiene semanas sobre diseño de esquemas, optimización y escalado. Usa SQLite y, en la semana de escalado, MySQL y PostgreSQL.</li>
+    <li><a href="https://web.mit.edu/6.102/www/">MIT 6.102: Software Construction (en inglés)</a>. Lecturas públicas en TypeScript sobre especificaciones, tipos abstractos de datos e interfaces. Es más exigente que los anteriores: conviene para después de la expo.</li>
+  </ul>
+
+  <h3>8.5 De Anthropic</h3>
+  <p>
+    Anthropic no publica material sobre patrones de diseño de software en general. Lo que publica sirve para dos cosas
+    relacionadas: diseñar sistemas que usan modelos de lenguaje y trabajar con Claude Code en el proyecto.
+  </p>
+  <ul>
+    <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic: «Building effective agents» (en inglés)</a>. Trata sobre sistemas con modelos de lenguaje, pero su regla central vale para cualquier diseño: buscar la solución más simple posible y sumar complejidad solo cuando hace falta.</li>
+    <li><a href="https://code.claude.com/docs/en/best-practices">Claude Code: buenas prácticas (en inglés)</a>. Recomienda conversar primero hasta tener una especificación escrita y recién después implementar, darle a Claude una prueba que pueda ejecutar para verificar su trabajo, y anotar en <code>CLAUDE.md</code> solo lo que no se deduce leyendo el repositorio, como las decisiones no documentadas. Esas decisiones son justamente las que guardan los ADR.</li>
+    <li><a href="https://anthropic.skilljar.com/">Anthropic Academy</a>: cursos gratuitos, entre ellos <a href="https://anthropic.skilljar.com/claude-code-101">Claude Code 101</a> y <a href="https://anthropic.skilljar.com/claude-code-in-action">Claude Code in Action</a>, para usar Claude Code en el desarrollo diario.</li>
+  </ul>
+
+  <p style="margin-top:3em">
+    <a href="10_docker_compose.html">← Anterior: Módulo 10</a> ·
+    <a href="index.html">Volver al índice</a>
+  </p>
+</main>
+
+<script src="comun/recorrido.js"></script>
+<script>
+  "use strict";
+
+  const POS = {
+    componente: [87.5, 265], estado: [217.5, 265], cliente: [347.5, 265], router: [502.5, 265],
+    servicio: [632.5, 265], repositorio: [762.5, 265], base: [860, 265],
+  };
+
+  // Salidas reales de bd/libro_de_movimientos.sql (mariadb --table).
+  const SALIDA = {
+    columna: `+------------------+--------+--------+
+| nombre           | unidad | stock  |
++------------------+--------+--------+
+| Queso cremoso    | kg     |  0.700 |
+| Leche entera 1 L | unidad | 16.000 |
++------------------+--------+--------+`,
+    historial: `+---------------------+--------+----------+---------+-------+
+| fecha               | tipo   | cantidad | usuario | saldo |
++---------------------+--------+----------+---------+-------+
+| 2026-11-02 08:10:00 | compra |    5.000 | Ana     | 5.000 |
+| 2026-11-02 10:32:00 | venta  |   -0.350 | Bruno   | 4.650 |
+| 2026-11-02 17:05:00 | venta  |   -1.200 | Bruno   | 3.450 |
+| 2026-11-03 09:15:00 | venta  |   -0.500 | Carla   | 2.950 |
+| 2026-11-03 19:40:00 | ajuste |   -2.000 | Carla   | 0.950 |
+| 2026-11-04 08:30:00 | merma  |   -0.250 | Ana     | 0.700 |
++---------------------+--------+----------+---------+-------+`,
+    diferencia: `+---------------------+--------+----------+---------+------------------+
+| fecha               | tipo   | cantidad | usuario | motivo           |
++---------------------+--------+----------+---------+------------------+
+| 2026-11-03 19:40:00 | ajuste |   -2.000 | Carla   | Conteo de cierre |
+| 2026-11-04 08:30:00 | merma  |   -0.250 | Ana     | Vencido          |
++---------------------+--------+----------+---------+------------------+`,
+    martes: `+-----------------+
+| stock_martes_12 |
++-----------------+
+|           2.950 |
++-----------------+`,
+    errores: `INSERT ... VALUES (1, 'venta', 0.500, 'Bruno', 'Venta 4', '2026-11-04 10:00')
+ERROR 4025 (23000): CONSTRAINT \`ck_movimiento_signo\` failed for \`punto_lacteo_patrones\`.\`movimiento_stock\`
+
+INSERT ... VALUES (1, 'ajuste', -0.100, 'Bruno', NULL, '2026-11-04 10:05')
+ERROR 4025 (23000): CONSTRAINT \`ck_movimiento_motivo\` failed for \`punto_lacteo_patrones\`.\`movimiento_stock\``,
+  };
+
+  const ESCENARIOS = {
+    venta: [
+      {
+        titulo: "Componente de presentación",
+        texto: "<p><code>TarjetaProducto</code> valida lo que escribió la cajera y avisa con <code>onAgregar</code>. No conoce el carrito ni la API: solo muestra datos y avisa eventos. Lo que se está escribiendo es <strong>estado local</strong>, porque no le importa a nadie más.</p>",
+        nodos: { componente: "activo" }, paquete: { en: "componente", etiqueta: "onAgregar(queso)" },
+        detalle: { titulo: "08_react_vite/src/features/ventas/TarjetaProducto.tsx", codigo: `function agregar() {
+  const numero = Number(cantidad);
+  if (!(numero > 0)) {
+    setError("Ingresá una cantidad mayor que cero");
+    return;
+  }
+  // ... la regla de los productos por unidad
+  setError(null);
+  onAgregar(producto, cantidad); // avisa al componente padre; la tarjeta no conoce el carrito
+}` },
+      },
+      {
+        titulo: "Estado elevado en la pantalla",
+        texto: "<p>El carrito vive en <code>PantallaVentas</code> porque lo usan la lista de productos y el carrito: es <strong>estado elevado</strong> al componente común más cercano. Con el reducer de la etapa 11, estas funciones pasan a <code>carritoReducer</code> y la pantalla solo llama a <code>useCarrito()</code>.</p>",
+        nodos: { estado: "activo" }, paquete: { en: "estado", etiqueta: "carrito: 2 líneas" },
+        detalle: { titulo: "09_front_back/src/features/ventas/PantallaVentas.tsx", codigo: `const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
+
+function agregar(producto: Producto, cantidad: string) {
+  setCarrito((anterior) => [...anterior.filter((item) => item.producto.id !== producto.id), { producto, cantidad }]);
+  setMensaje(null);
+  setError(null);
+}` },
+      },
+      {
+        titulo: "Cliente de API centralizado",
+        texto: "<p>Al cobrar, la pantalla llama a <code>api.registrarVenta(items)</code>. Detrás de esa función simple, <code>pedir</code> agrega el token, arma la URL y traduce los errores. Es una <strong>fachada</strong>: si el backend cambia la forma de autenticar, solo cambia este archivo.</p>",
+        nodos: { cliente: "activo" }, paquete: { en: "cliente", etiqueta: "POST /api/ventas · Bearer" },
+        detalle: { titulo: "09_front_back/src/api/cliente.ts", codigo: `async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promise<T> {
+  const headers = new Headers(opciones.headers);
+  const token = leerToken();
+  if (token) {
+    headers.set("Authorization", \`Bearer \${token}\`);
+  }
+  const respuesta = await fetch(\`\${BASE}\${ruta}\`, { ...opciones, headers });
+  // ... si no es ok, ErrorApi con el código y el mensaje` },
+      },
+      {
+        titulo: "Inyección de dependencias y DTO",
+        texto: "<p>El router declara qué necesita y FastAPI lo construye: con la sesión arma el service y con el token busca al usuario. <code>VentaIn</code> es un <strong>DTO</strong>, la forma de los datos de entrada, separada del modelo de la base. El router tiene una sola línea: no decide nada.</p>",
+        nodos: { router: "activo" }, paquete: { en: "router", etiqueta: "VentaIn + usuario + servicio" },
+        detalle: { titulo: "06_seguridad/app/routers/ventas.py y app/dependencies.py", codigo: `@router.post("", status_code=status.HTTP_201_CREATED)
+def registrar_venta(venta: VentaIn, servicio: ServicioVentasDep, usuario: UsuarioActualDep) -> VentaOut:
+    return servicio.registrar(venta, usuario.id)
+
+# dependencies.py
+def obtener_servicio_ventas(sesion: SesionDep) -> ServicioVentas:
+    return ServicioVentas(sesion)` },
+      },
+      {
+        titulo: "Service Layer",
+        texto: "<p>Las reglas del negocio están acá y solo acá: el producto existe, la leche se vende por unidad y alcanza el stock. Si una falla, el service lanza un error de dominio, como <code>StockInsuficiente</code>, y <code>main.py</code> lo traduce a 409. El futuro bot de Telegram podría usar este mismo service.</p>",
+        nodos: { servicio: "activo" }, paquete: { en: "servicio", etiqueta: "reglas OK" },
+        detalle: { titulo: "06_seguridad/app/services/ventas.py", codigo: `for producto_id in sorted(pedidos):
+    cantidad = pedidos[producto_id].quantize(GRAMOS)
+    producto = self.productos.obtener_para_actualizar(producto_id)
+    if producto is None:
+        raise ProductoNoEncontrado(producto_id)
+    if producto.unidad == "unidad" and cantidad != cantidad.to_integral_value():
+        raise CantidadInvalida(producto.nombre)
+    if producto.stock < cantidad:
+        raise StockInsuficiente(producto.nombre, producto.stock, cantidad)
+    lineas.append((producto, cantidad))` },
+      },
+      {
+        titulo: "Repository y Unit of Work",
+        texto: "<p>El service pide «agregar una venta» sin escribir SQL: eso es el <strong>repository</strong>, que en la etapa 03 guardaba en memoria con la misma interfaz. La <code>Session</code> es la <strong>unidad de trabajo</strong>: anota todos los cambios y el <code>commit()</code> del service los confirma juntos o ninguno.</p>",
+        nodos: { servicio: "activo", repositorio: "activo" }, paquete: { en: "repositorio", etiqueta: "flush() → commit()" },
+        detalle: { titulo: "06_seguridad/app/repositories/ventas.py y app/services/ventas.py", codigo: `def agregar(self, usuario_id: int, lineas: list[tuple[Producto, Decimal]], total: Decimal) -> Venta:
+    venta = Venta(usuario_id=usuario_id, total=total)
+    for producto, cantidad in lineas:
+        venta.detalles.append(VentaDetalle(producto=producto, cantidad=cantidad, precio_unitario=producto.precio))
+    self.sesion.add(venta)
+    self.sesion.flush()
+    return venta
+
+# services/ventas.py, línea 65
+self.sesion.commit()` },
+      },
+      {
+        titulo: "Tres decisiones en la base",
+        texto: "<p><code>precio_unitario</code> es una <strong>copia histórica</strong> del precio y <code>total</code> es una <strong>desnormalización deliberada</strong>. El stock, en cambio, se sobrescribe: <code>stock=1.750</code> reemplaza al 2,100 anterior y no queda rastro de por qué. El tercer escenario muestra qué se pierde con eso.</p>",
+        nodos: { repositorio: "ok", base: "ok" }, paquete: { en: "base", etiqueta: "COMMIT", tipo: "ok" },
+        detalle: { titulo: "Registro de SQL de la venta (módulo 05)", codigo: "UPDATE producto SET stock=1.750 WHERE producto.id = 1\nUPDATE producto SET stock=22.000 WHERE producto.id = 2\n\nINSERT INTO venta (usuario_id, total) VALUES (2, 7275.00)\n    RETURNING venta.id, venta.fecha\n\nINSERT INTO venta_detalle (venta_id, producto_id, cantidad, precio_unitario)\n    VALUES (1, 1, 0.350, 12500.00), (1, 2, 2.000, 1450.00)\n\nCOMMIT" },
+      },
+    ],
+    precio: [
+      {
+        titulo: "Llega un costo nuevo",
+        texto: "<p>En el sistema real, la dueña cargaría una compra desde una pantalla de compras, que todavía no existe, y la petición haría el recorrido del primer escenario. La etapa 11 simula ese momento llamando directamente a <code>registrar_costo_nuevo</code>: el queso pasa a costar 9800,00 por kg.</p>",
+        nodos: { componente: "activo", cliente: "activo", router: "activo" }, paquete: { en: "router", etiqueta: "costo nuevo: 9800.00" },
+        detalle: { titulo: "backend/precios.py", codigo: `def registrar_costo_nuevo(producto: Producto, costo: Decimal) -> None:
+    """Lo que haría el service al cargar una compra: recalcular el precio con la estrategia del producto."""
+    estrategia = estrategia_para(producto.modo_precio, producto.valor_precio)
+    producto.precio = estrategia.calcular(costo)` },
+      },
+      {
+        titulo: "La fábrica arma la estrategia",
+        texto: "<p>El queso tiene <code>modo_precio = \"margen\"</code> y <code>valor_precio = 35</code>. La fábrica traduce esas dos columnas a un objeto, <code>PrecioPorMargen(35)</code>. Es la misma idea que <code>requerir_rol()</code> en el módulo 06: una función que fabrica lo que el resto del código usa.</p>",
+        nodos: { servicio: "activo" }, paquete: { en: "servicio", etiqueta: "PrecioPorMargen(35)" },
+        detalle: { titulo: "backend/precios.py", codigo: `def estrategia_para(modo: str, valor: Decimal) -> EstrategiaDePrecio:
+    """Fábrica: traduce lo que guarda la base (dos columnas, modo y valor) a una estrategia."""
+    if modo == "margen":
+        return PrecioPorMargen(valor)
+    if modo == "manual":
+        return PrecioManual(valor)
+    raise ValueError(f"Modo de precio desconocido: {modo}")` },
+      },
+      {
+        titulo: "La estrategia calcula",
+        texto: "<p><code>calcular</code> multiplica 9800,00 por 1,35 y redondea a centavos: 13 230,00. El service no sabe cómo se obtuvo ese número, solo llamó a <code>calcular(costo)</code>.</p>",
+        nodos: { servicio: "ok" }, paquete: { en: "servicio", etiqueta: "13230.00", tipo: "ok" },
+        detalle: { titulo: "backend/precios.py", codigo: `@dataclass(frozen=True)
+class PrecioPorMargen:
+    porcentaje: Decimal  # 35 significa 35 % sobre el costo
+
+    def calcular(self, costo: Decimal) -> Decimal:
+        return (costo * (1 + self.porcentaje / 100)).quantize(CENTAVOS, rounding=ROUND_HALF_UP)` },
+      },
+      {
+        titulo: "Otro producto, otra estrategia, la misma línea",
+        texto: "<p>Para la leche, la fábrica devuelve <code>PrecioManual(1450.00)</code>, que ignora el costo: aunque el costo sube a 1180,00, el precio sigue en 1450,00. La línea del service que calcula es la misma para los tres productos.</p>",
+        nodos: { servicio: "ok" }, paquete: { en: "servicio", etiqueta: "leche: 1450.00", tipo: "ok" },
+        detalle: { titulo: "python backend/precios.py (salida real)", codigo: `Producto           Modo          Costo nuevo  Precio antes  Precio nuevo
+Queso cremoso      margen 35         9800.00      12500.00      13230.00
+Salame milán       margen 40        14000.00      18900.00      19600.00
+Leche entera 1 L   manual            1180.00       1450.00       1450.00` },
+      },
+      {
+        titulo: "El precio nuevo no reescribe el pasado",
+        texto: "<p>En el sistema real, el repository guardaría el precio nuevo en <code>producto.precio</code>. Las ventas anteriores conservan 12 500,00 en <code>venta_detalle.precio_unitario</code>: la copia histórica del módulo 04 permite cambiar precios sin alterar lo que ya se vendió.</p>",
+        nodos: { repositorio: "activo", base: "ok" }, paquete: { en: "base", etiqueta: "precio = 13230.00", tipo: "ok" },
+        detalle: { titulo: "En la base del sistema real", codigo: "producto 1 (Queso cremoso):   precio = 13230.00   ← cambia\nventa_detalle de la venta 1:  precio_unitario = 12500.00   ← no cambia" },
+      },
+      {
+        titulo: "¿Y con un if?",
+        texto: "<p>Con dos modos, esta función hace lo mismo y se lee igual de bien. La estrategia empieza a pagar con el tercer modo o cuando cada uno necesita sus propios datos y validaciones. Para la expo, el <code>if</code> sería una decisión válida, y pasar a la estrategia más adelante cuesta poco porque es un cambio dentro de un solo archivo.</p>",
+        nodos: { servicio: "activo" }, paquete: null,
+        detalle: { titulo: "La alternativa sin patrón", codigo: `def calcular_precio(modo: str, valor: Decimal, costo: Decimal) -> Decimal:
+    if modo == "margen":
+        return (costo * (1 + valor / 100)).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+    if modo == "manual":
+        return valor
+    raise ValueError(f"Modo de precio desconocido: {modo}")` },
+      },
+    ],
+    stock: [
+      {
+        titulo: "Lo que sabe la columna",
+        texto: "<p>Después de una semana, <code>producto.stock</code> dice 0,700 kg de queso. Se compraron 5 kg y se vendieron 2,050 kg, así que faltan 2,250 kg. La columna no puede decir quién, cuándo ni por qué, porque cada <code>UPDATE</code> reemplazó el valor anterior.</p>",
+        nodos: { base: "error" }, paquete: { en: "base", etiqueta: "stock: 0.700", tipo: "error" },
+        detalle: { titulo: "Consulta 1: la forma A", codigo: SALIDA.columna },
+      },
+      {
+        titulo: "El libro tiene cada hecho",
+        texto: "<p>El libro de movimientos tiene seis filas para el queso, y la función de ventana calcula el saldo después de cada una. El último saldo coincide con la columna: la columna es un resumen del libro.</p>",
+        nodos: { base: "activo" }, paquete: { en: "base", etiqueta: "6 movimientos" },
+        detalle: { titulo: "Consulta 3: historial con saldo", codigo: SALIDA.historial },
+      },
+      {
+        titulo: "La diferencia tiene nombre y motivo",
+        texto: "<p>Los 2,250 kg que faltaban son un ajuste de Carla al pesar la horma en el cierre del martes y una merma de Ana por vencimiento. Ahora la dueña sabe a quién preguntar, por ejemplo si el remito de la compra decía 5 kg y llegaron menos.</p>",
+        nodos: { base: "ok" }, paquete: { en: "base", etiqueta: "ajuste + merma", tipo: "ok" },
+        detalle: { titulo: "Consulta 4: lo que salió sin venderse", codigo: SALIDA.diferencia },
+      },
+      {
+        titulo: "El stock en cualquier fecha",
+        texto: "<p>Sumando solo los movimientos hasta el martes al mediodía se obtiene cuánto había en ese momento. Con la columna, ese dato se perdió con el siguiente <code>UPDATE</code>.</p>",
+        nodos: { base: "ok" }, paquete: { en: "base", etiqueta: "martes 12:00 → 2.950", tipo: "ok" },
+        detalle: { titulo: "Consulta 5", codigo: SALIDA.martes },
+      },
+      {
+        titulo: "Las restricciones cuidan el libro",
+        texto: "<p>Una venta con cantidad positiva y un ajuste sin motivo se rechazan en la base, aunque el backend tuviera un error. Las reglas que no pueden tener excepciones conviene ponerlas lo más cerca posible de los datos.</p>",
+        nodos: { base: "error" }, paquete: { en: "base", etiqueta: "CHECK rechaza", tipo: "error" },
+        detalle: { titulo: "Consulta 6: dos inserciones inválidas", codigo: SALIDA.errores },
+      },
+      {
+        titulo: "Cómo se decidiría",
+        texto: "<p>Con las preguntas de la sección 2.6: el problema es concreto (la dueña pidió saber quién hizo cada cosa), revertirlo es caro (lo que no se registra hoy no se recupera), el costo es bajo (una tabla y un <code>INSERT</code> más en la misma transacción) y se prueba solo, con este script. Queda como el registro 0003, con estado «Propuesta».</p>",
+        nodos: { servicio: "activo", repositorio: "activo", base: "ok" }, paquete: null,
+        detalle: { titulo: "decisiones/0003-stock-como-libro-de-movimientos.md", codigo: `## Decisión
+
+Se propone la opción 2.
+
+## Consecuencias
+
+- Se puede responder quién cargó o ajustó cada cantidad, cuánto había en cualquier fecha y dónde está una diferencia.
+- Cada operación que cambia el stock escribe dos cosas, y las dos tienen que ir en la misma transacción.
+- Conviene una consulta de control periódica que compare el saldo con la suma de movimientos.
+- Los ajustes y las mermas exigen un motivo, lo que agrega un campo a esas pantallas.` },
+      },
+    ],
+  };
+
+  const raiz = document.getElementById("recorrido");
+  const dibujar = crearDiagrama(document.getElementById("diagrama"), POS);
+  const recorrido = crearRecorrido(raiz, ESCENARIOS.venta, (paso) => {
+    dibujar(paso);
+    mostrarDetalle(raiz, paso.detalle);
+  });
+  conectarEscenarios(document.getElementById("escenarios"), ESCENARIOS, recorrido);
+</script>
+</body>
+</html>

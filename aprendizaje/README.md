@@ -29,6 +29,7 @@ Cada módulo está pensado para estudiarse en 45 a 100 minutos; el índice indic
 | 08 | React + Vite | ¿Cómo se crea, declara e inicializa una interfaz hecha con componentes? | [`etapas/08_react_vite`](etapas/08_react_vite/README.md) | Disponible |
 | 09 | Frontend ↔ backend | ¿Cómo consume React la API y cómo maneja el inicio de sesión? | [`etapas/09_front_back`](etapas/09_front_back/README.md) | Disponible |
 | 10 | Docker Compose | ¿Cómo se empaqueta todo lo que antes se ejecutó a mano? | [`etapas/10_docker_compose`](etapas/10_docker_compose/README.md) | Disponible |
+| 11 | Patrones de diseño | ¿Qué patrones ya aparecieron, cuáles hacen falta en el sistema real y cómo se decide cuándo usar uno? | [`etapas/11_patrones`](etapas/11_patrones/README.md) | Disponible |
 
 ## Estructura de carpetas
 
@@ -39,7 +40,7 @@ aprendizaje/
 ├── explicaciones_didacticas/
 │   ├── index.html                  ← punto de entrada
 │   ├── comun/                      ← estilos y motor de animaciones compartidos
-│   └── 00_mapa_general.html … 10_docker_compose.html
+│   └── 00_mapa_general.html … 11_patrones_diseno.html
 └── etapas/                         ← código ejecutable, una carpeta por módulo
     ├── 01_http/                    servidor y cliente HTTP con la biblioteca estándar
     ├── 02_fastapi_basico/          la misma API con FastAPI, en un archivo
@@ -50,7 +51,8 @@ aprendizaje/
     ├── 07_js_vs_ts/                el mismo carrito en JavaScript y TypeScript
     ├── 08_react_vite/              la caja en React, con datos de prueba
     ├── 09_front_back/              la caja conectada a la API de la etapa 06
-    └── 10_docker_compose/          todo el sistema en contenedores
+    ├── 10_docker_compose/          todo el sistema en contenedores
+    └── 11_patrones/                libro de movimientos, estrategia, reducer y registros de decisiones
 ```
 
 ## Requisitos
