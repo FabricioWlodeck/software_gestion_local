@@ -1,0 +1,49 @@
+/* Estilos globales: lo que Mantine no cubre con su tema. */
+
+:root {
+  /* Fondo del mostrador, papel del ticket, bordes y textos secundarios */
+  --pl-fondo: #eef1ea;
+  --pl-papel: #ffffff;
+  --pl-borde: #d5dace;
+  --pl-tenue: #5e6b62;
+  --pl-alerta: #c2410c;
+  --pl-numeros: "Barlow Condensed", Barlow, system-ui, sans-serif;
+}
+
+/* Mantine pone el esquema de color como atributo en <html> */
+:root[data-mantine-color-scheme="dark"] {
+  --pl-fondo: var(--mantine-color-dark-8);
+  --pl-papel: var(--mantine-color-dark-7);
+  --pl-borde: var(--mantine-color-dark-4);
+  --pl-tenue: var(--mantine-color-dark-2);
+  --pl-alerta: #fb923c;
+}
+
+body {
+  background: var(--pl-fondo);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Números alineados en columnas (precios, cantidades, totales) */
+.pl-numero {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Cifras grandes con la letra de los carteles de precios */
+.pl-cifra {
+  font-family: var(--pl-numeros);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

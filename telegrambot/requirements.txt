@@ -1,0 +1,6 @@
+# [job-queue] suma APScheduler para las tareas programadas.
+# tzdata trae las zonas horarias para zoneinfo (Windows y algunas imágenes slim no las tienen).
+python-telegram-bot[job-queue]==22.8
+aiomysql==0.3.2
+matplotlib==3.11.2
+tzdata==2026.6

@@ -1,0 +1,220 @@
+/* Pantalla de venta: productos a la izquierda, ticket a la derecha (abajo en pantallas chicas) */
+.pantalla {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: var(--mantine-spacing-lg);
+  align-items: start;
+}
+
+@media (max-width: $mantine-breakpoint-md) {
+  .pantalla {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--mantine-spacing-md);
+  }
+}
+
+/* ---------- Tarjetas de producto: como los carteles de precio del mostrador ---------- */
+
+.grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: $mantine-breakpoint-xs) {
+  .grilla {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 108px;
+  padding: 10px 12px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--pl-papel);
+  border: 1px solid var(--pl-borde);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tarjeta:hover:not(:disabled) {
+  border-color: var(--mantine-color-frasco-5);
+}
+
+.tarjeta:focus-visible {
+  outline: 3px solid var(--mantine-color-frasco-5);
+  outline-offset: 1px;
+}
+
+/* La tarjeta que elige Enter: borde amarillo grueso */
+.tarjeta[data-resaltada] {
+  border-color: var(--mantine-color-queso-6);
+  box-shadow: 0 0 0 2px var(--mantine-color-queso-5);
+}
+
+.tarjeta[data-en-ticket] {
+  background: light-dark(var(--mantine-color-queso-0), var(--mantine-color-dark-6));
+}
+
+.tarjeta:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.nombre {
+  font-weight: 600;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.precio {
+  font-family: var(--pl-numeros);
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: light-dark(var(--mantine-color-frasco-8), var(--mantine-color-frasco-3));
+}
+
+.porUnidad {
+  font-family: Barlow, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--pl-tenue);
+  margin-left: 2px;
+}
+
+.existencias {
+  font-size: 0.8125rem;
+  color: var(--pl-tenue);
+}
+
+.existencias[data-bajo] {
+  color: var(--pl-alerta);
+  font-weight: 600;
+}
+
+/* ---------- Balanza: producto elegido, cantidad e importe ---------- */
+
+.balanza {
+  background: var(--pl-papel);
+  border: 1px solid var(--pl-borde);
+  border-left: 6px solid var(--mantine-color-frasco-7);
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+
+.balanza[data-vacia] {
+  border-left-color: var(--pl-borde);
+}
+
+/* ---------- Ticket: papel con el borde cortado como el de la balanza ---------- */
+
+.ticket {
+  position: sticky;
+  top: calc(var(--app-shell-header-offset, 68px) + var(--mantine-spacing-md));
+  background: var(--pl-papel);
+  border-radius: 6px 6px 0 0;
+  padding: var(--mantine-spacing-md);
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 1px light-dark(#9aa294, #000));
+}
+
+.ticket::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  height: 10px;
+  background:
+    linear-gradient(135deg, var(--pl-papel) 50%, transparent 50%) 0 0 / 14px 10px repeat-x,
+    linear-gradient(225deg, var(--pl-papel) 50%, transparent 50%) 0 0 / 14px 10px repeat-x;
+}
+
+@media (max-width: $mantine-breakpoint-md) {
+  .ticket {
+    position: relative;
+    top: 0;
+  }
+}
+
+.linea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--pl-borde);
+}
+
+.lineaNombre {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.lineaNombre:hover .lineaTitulo {
+  text-decoration: underline;
+}
+
+.lineaNombre:focus-visible {
+  outline: 2px solid var(--mantine-color-frasco-5);
+  outline-offset: 2px;
+}
+
+.lineaTitulo {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* El total: lo único en amarillo queso, con la cifra grande del cartel */
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--mantine-spacing-sm);
+  background: var(--mantine-color-queso-5);
+  color: #1b2620;
+  border-radius: var(--mantine-radius-sm);
+  padding: 10px 14px;
+}
+
+.totalCifra {
+  font-family: var(--pl-numeros);
+  font-weight: 700;
+  font-size: clamp(2.25rem, 4vw, 3rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cobrar {
+  height: 64px;
+  font-size: 1.375rem;
+}
+
+/* En el celular, una barra fija abajo con el total para no perderlo de vista */
+.barraMovil {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--pl-papel);
+  border-top: 4px solid var(--mantine-color-queso-5);
+  margin: 0 calc(-1 * var(--mantine-spacing-sm)) calc(-1 * var(--mantine-spacing-sm));
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
+}

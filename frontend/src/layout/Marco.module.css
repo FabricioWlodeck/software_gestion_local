@@ -1,0 +1,33 @@
+/* Encabezado blanco con el borde amarillo de la cáscara del queso */
+.encabezado {
+  background: var(--pl-papel);
+  border-bottom: 4px solid var(--mantine-color-queso-5);
+}
+
+.marca {
+  font-family: var(--pl-numeros);
+  font-weight: 700;
+  font-size: 1.5625rem;
+  line-height: 1;
+  color: light-dark(var(--mantine-color-frasco-8), var(--mantine-color-frasco-3));
+  white-space: nowrap;
+}
+
+.navegacion {
+  background: var(--pl-papel);
+}
+
+.principal {
+  background: var(--pl-fondo);
+}
+
+/* Enlaces del menú: grandes, con la marca verde a la izquierda cuando están activos */
+.enlace {
+  border-radius: var(--mantine-radius-sm);
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.enlace[data-active] {
+  box-shadow: inset 4px 0 0 var(--mantine-color-frasco-7);
+}

@@ -1,0 +1,68 @@
+/* Gráfico de barras por día hecho con CSS */
+.grafico {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 220px;
+  padding-top: 8px;
+}
+
+.columna {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* La zona de la barra ocupa toda la altura: el mouse no tiene que acertarle a una barra baja */
+.zonaBarra {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--pl-borde);
+  cursor: default;
+}
+
+.zonaBarra:hover .barra {
+  background: var(--mantine-color-frasco-8);
+}
+
+.barra {
+  width: 100%;
+  max-width: 48px;
+  margin: 0 auto;
+  min-height: 2px;
+  background: var(--mantine-color-frasco-6);
+  border-radius: 4px 4px 0 0;
+}
+
+.etiqueta {
+  height: 20px;
+  padding-top: 2px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+/* Tira de números del período: como el pie de un ticket, sin tarjetas */
+.cifras {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  background: var(--pl-papel);
+  border: 1px solid var(--pl-borde);
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+}
+
+.cifra {
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  box-shadow: 1px 0 0 var(--pl-borde), 0 1px 0 var(--pl-borde);
+  min-width: 0;
+}
+
+/* El total ocupa dos columnas para que la cifra grande no se corte */
+.cifraPrincipal {
+  grid-column: span 2;
+  background: var(--mantine-color-queso-5);
+  color: #1b2620;
+}

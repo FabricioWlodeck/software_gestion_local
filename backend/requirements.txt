@@ -1,0 +1,11 @@
+# Versiones verificadas con Python 3.12 (noviembre de 2026)
+fastapi[standard]==0.163.1
+sqlalchemy==2.1.8
+pymysql==1.2.4
+alembic==1.20.1
+# Hash de contraseñas con Argon2 y tokens JWT
+pwdlib[argon2]==0.4.2
+pyjwt==2.15.1
+# Pruebas (TestClient usa httpx)
+pytest==9.2.0
+httpx==0.28.1

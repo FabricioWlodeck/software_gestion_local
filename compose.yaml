@@ -1,0 +1,99 @@
+# Punto Lácteo: todo el sistema con un comando.
+#   docker compose up -d --build     → http://localhost:8090
+# Las contraseñas y el token del bot van en .env (ver .env.sample); nunca en este archivo.
+# Los container_name llevan el prefijo puntolacteo- para no chocar con el stack de la materia IoT.
+
+name: punto-lacteo
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: puntolacteo-mariadb
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${MARIADB_DB}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_USER_PASS}
+      # Las usa mariadb/init/01_inicial.sh para crear el usuario de solo lectura del bot
+      - MARIADB_DB=${MARIADB_DB}
+      - TB_DB_USER=${TB_DB_USER}
+      - TB_DB_PASS=${TB_DB_PASS}
+    volumes:
+      - datos_mariadb:/var/lib/mysql
+      - ./mariadb/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:3310:3306"   # solo desde esta PC, para desarrollo y pruebas
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    image: puntolacteo-backend
+    container_name: puntolacteo-backend
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      - DATABASE_URL=mariadb+pymysql://${MARIADB_USER}:${MARIADB_USER_PASS}@${MARIADB_SERVER}:3306/${MARIADB_DB}?charset=utf8mb4
+      - CLAVE_SECRETA=${CLAVE_SECRETA}
+      - DUENIA_USUARIO=${DUENIA_USUARIO}
+      - DUENIA_NOMBRE=${DUENIA_NOMBRE}
+      - DUENIA_CONTRASENA=${DUENIA_CONTRASENA}
+      - SEMILLA_CONTRASENA_EMPLEADOS=${SEMILLA_CONTRASENA_EMPLEADOS}
+    ports:
+      - "127.0.0.1:8001:8000"   # /docs y desarrollo del frontend con Vite
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    image: puntolacteo-frontend
+    container_name: puntolacteo-frontend
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend
+
+  telegrambot:
+    build: ./telegrambot
+    image: puntolacteo-telegrambot
+    container_name: puntolacteo-telegrambot
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      - TB_TOKEN=${TB_TOKEN}
+      - MARIADB_SERVER=${MARIADB_SERVER}
+      - MARIADB_USER=${TB_DB_USER}
+      - MARIADB_USER_PASS=${TB_DB_PASS}
+      - MARIADB_DB=${MARIADB_DB}
+    volumes:
+      - datos_bot:/app/datos
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  phpmyadmin:
+    image: phpmyadmin:5.2
+    container_name: puntolacteo-phpmyadmin
+    restart: unless-stopped
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+      - PMA_HOST=mariadb
+    ports:
+      - "8091:80"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+volumes:
+  datos_mariadb:
+  datos_bot:

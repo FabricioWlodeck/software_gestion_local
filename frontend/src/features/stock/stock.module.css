@@ -1,0 +1,8 @@
+/* Filas por debajo del mínimo: fondo naranja suave para encontrarlas de un vistazo */
+.bajo {
+  background: light-dark(var(--mantine-color-orange-0), rgba(251, 146, 60, 0.12));
+}
+
+.bajo td:first-child {
+  box-shadow: inset 4px 0 0 var(--mantine-color-orange-6);
+}

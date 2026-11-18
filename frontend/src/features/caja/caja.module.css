@@ -1,0 +1,50 @@
+/* Franja de estado de la caja: verde si está abierta, naranja si hay que abrirla */
+.barra {
+  background: var(--pl-papel);
+  border: 1px solid var(--pl-borde);
+  border-left-width: 6px;
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-xs) var(--mantine-spacing-md);
+}
+
+.barra[data-estado="abierta"] {
+  border-left-color: var(--mantine-color-frasco-7);
+}
+
+.barra[data-estado="cerrada"] {
+  border-left-color: var(--mantine-color-orange-6);
+  background: light-dark(var(--mantine-color-orange-0), var(--mantine-color-dark-6));
+}
+
+.dato {
+  line-height: 1.15;
+}
+
+/* Renglones del cálculo del cierre: concepto a la izquierda, importe a la derecha */
+.renglon {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-md);
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--pl-borde);
+}
+
+.diferencia {
+  border-radius: var(--mantine-radius-sm);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+
+.diferencia[data-signo="cero"] {
+  background: light-dark(var(--mantine-color-frasco-0), var(--mantine-color-dark-6));
+  color: light-dark(var(--mantine-color-frasco-9), var(--mantine-color-frasco-3));
+}
+
+.diferencia[data-signo="sobra"] {
+  background: light-dark(var(--mantine-color-queso-0), var(--mantine-color-dark-6));
+  color: light-dark(var(--mantine-color-queso-9), var(--mantine-color-queso-3));
+}
+
+.diferencia[data-signo="falta"] {
+  background: light-dark(var(--mantine-color-red-0), var(--mantine-color-dark-6));
+  color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-3));
+}
