@@ -13,3 +13,6 @@ dist/
 
 # Sistema operativo
 Thumbs.db
+
+.claude
+skills-lock.json
